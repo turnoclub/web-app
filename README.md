@@ -205,10 +205,11 @@ Use the provided localhost proxy file (recommended for `ng serve`):
 1. Start the dev server with the localhost proxy:
 
    ```bash
-   ng serve --proxy-config proxy.localhost.conf.js
+   npm run start:local
+   # or: ng serve --proxy-config proxy.localhost.conf.js
    ```
 
-2. Ensure your local Fineract instance is running on `http://localhost:8443`.
+2. Ensure your local Fineract instance is running on `https://localhost:8443` (self-signed certificates are accepted).
 
 Notes:
 
