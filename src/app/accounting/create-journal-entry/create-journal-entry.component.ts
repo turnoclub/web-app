@@ -15,7 +15,8 @@ import {
   ElementRef,
   ViewChild,
   AfterViewInit,
-  inject
+  inject,
+  ChangeDetectorRef
 } from '@angular/core';
 import { UntypedFormGroup, UntypedFormBuilder, Validators, UntypedFormArray, UntypedFormControl } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
@@ -32,6 +33,7 @@ import { ConfigurationWizardService } from '../../configuration-wizard/configura
 import { NextStepDialogComponent } from '../../configuration-wizard/next-step-dialog/next-step-dialog.component';
 import { GlAccountSelectorComponent } from '../../shared/accounting/gl-account-selector/gl-account-selector.component';
 import { MatIconButton, MatButton } from '@angular/material/button';
+import { MatTooltip } from '@angular/material/tooltip';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import { CdkTextareaAutosize } from '@angular/cdk/text-field';
 import { STANDALONE_SHARED_IMPORTS } from 'app/standalone-shared.module';
@@ -47,7 +49,8 @@ import { STANDALONE_SHARED_IMPORTS } from 'app/standalone-shared.module';
     GlAccountSelectorComponent,
     MatIconButton,
     FaIconComponent,
-    CdkTextareaAutosize
+    CdkTextareaAutosize,
+    MatTooltip
   ],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
@@ -61,6 +64,10 @@ export class CreateJournalEntryComponent implements OnInit, AfterViewInit {
   private dialog = inject(MatDialog);
   private configurationWizardService = inject(ConfigurationWizardService);
   private popoverService = inject(PopoverService);
+  private cdr = inject(ChangeDetectorRef);
+
+  isSubmitting = false;
+  submitIdempotencyKey?: string;
 
   onAmountInput(event: Event): void {
     const target = event.target;
@@ -217,6 +224,17 @@ export class CreateJournalEntryComponent implements OnInit, AfterViewInit {
    * if successful redirects to view created transaction.
    */
   submit() {
+    if (this.journalEntryForm.invalid || this.isSubmitting) {
+      return;
+    }
+
+    if (!this.submitIdempotencyKey) {
+      this.submitIdempotencyKey = crypto.randomUUID();
+    }
+
+    this.isSubmitting = true;
+    this.cdr.markForCheck();
+
     const journalEntry = this.journalEntryForm.value;
     // TODO: Update once language and date settings are setup
     journalEntry.locale = this.settingsService.language.code;
@@ -230,14 +248,34 @@ export class CreateJournalEntryComponent implements OnInit, AfterViewInit {
     if (!journalEntry['externalAssetOwner']) {
       delete journalEntry['externalAssetOwner'];
     }
-    this.accountingService.createJournalEntry(journalEntry).subscribe((response) => {
-      this.router.navigate(
-        [
-          '../transactions/view',
-          response.transactionId
-        ],
-        { relativeTo: this.route }
-      );
+    this.accountingService.createJournalEntry(journalEntry, this.submitIdempotencyKey).subscribe({
+      next: (response) => {
+        this.submitIdempotencyKey = undefined;
+        this.router
+          .navigate(
+            [
+              '../transactions/view',
+              response.transactionId
+            ],
+            { relativeTo: this.route }
+          )
+          .then((navigated) => {
+            if (!navigated) {
+              this.isSubmitting = false;
+              this.cdr.markForCheck();
+            }
+          })
+          .catch(() => {
+            this.isSubmitting = false;
+            this.cdr.markForCheck();
+          });
+      },
+      error: () => {
+        // Fineract replays the stored response for a reused key, so a corrected entry needs a new key.
+        this.submitIdempotencyKey = undefined;
+        this.isSubmitting = false;
+        this.cdr.markForCheck();
+      }
     });
   }
 

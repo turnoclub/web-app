@@ -16,11 +16,12 @@ export class FormatNumberPipe implements PipeTransform {
   private settingsService = inject(SettingsService);
 
   transform(value: string | number, defaultValue?: any, digits?: string | number): string {
-    if (value === undefined) {
-      return defaultValue ? defaultValue : '';
+    if (value == null || value === '') {
+      return defaultValue != null ? `${defaultValue}` : '';
     }
     const decimals = digits !== undefined ? digits : this.settingsService.decimals;
-    const format = `1.${decimals}-10`;
-    return this.decimalFormat.transform(value, format);
+    const format = `1.${decimals}-${decimals}`;
+    const formatted = this.decimalFormat.transform(value, format);
+    return formatted ?? (defaultValue != null ? `${defaultValue}` : '');
   }
 }

@@ -8,14 +8,39 @@
 
 @if (!transactionData.type.contra) {
   <div class="container m-b-20 transaction-buttons layout-align-end gap-2percent">
-    <span *mifosxHasPermission="'ADJUST_LOAN'">
-      <button mat-raised-button color="primary" [routerLink]="'edit'" [disabled]="!allowEdition">
-        <fa-icon icon="edit" class="m-r-10"></fa-icon>{{ 'labels.buttons.Edit' | translate }}
+    <span *mifosxHasPermission="adjustPermission">
+      <button
+        mat-raised-button
+        color="primary"
+        [routerLink]="'edit'"
+        queryParamsHandling="preserve"
+        [disabled]="!allowEdition"
+      >
+        <fa-icon icon="edit" class="m-r-10"></fa-icon>{{ 'labels.buttons.Adjust' | translate }}
       </button>
     </span>
-    <span *mifosxHasPermission="'ADJUST_LOAN'">
+    @if (allowDiscountFeeAdjustment) {
+      <span *mifosxHasPermission="'DISCOUNTFEEADJUSTMENT_WORKINGCAPITALLOAN'">
+        <button
+          mat-raised-button
+          color="primary"
+          [routerLink]="'discount-fee-adjustment'"
+          queryParamsHandling="preserve"
+        >
+          <fa-icon icon="edit" class="m-r-10"></fa-icon>{{ 'labels.buttons.Discount Fee Adjustment' | translate }}
+        </button>
+      </span>
+    }
+    @if (allowAdjustByDelta) {
+      <span *mifosxHasPermission="adjustByDeltaPermission">
+        <button mat-raised-button color="primary" [routerLink]="'adjust-by-delta'" queryParamsHandling="preserve">
+          <fa-icon icon="edit" class="m-r-10"></fa-icon>{{ 'labels.buttons.Adjust by Difference' | translate }}
+        </button>
+      </span>
+    }
+    <span *mifosxHasPermission="undoPermission">
       <button mat-raised-button color="warn" (click)="undoTransaction()" [disabled]="!allowUndo">
-        <fa-icon icon="undo" class="m-r-10"></fa-icon>{{ 'labels.buttons.Undo' | translate }}
+        <fa-icon icon="undo" class="m-r-10"></fa-icon>{{ undoButtonLabelKey | translate }}
       </button>
     </span>
     <span *mifosxHasPermission="'CHARGEBACK_LOAN'">

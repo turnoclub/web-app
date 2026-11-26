@@ -34,27 +34,39 @@ export class InputAmountComponent implements OnInit {
   @Input() inputFormControl: UntypedFormControl;
   @Input() minVal: number;
   @Input() maxVal: number;
+  /**
+   * Accepts a leading minus sign. Off by default: amounts are unsigned
+   * everywhere except where the field carries a signed difference.
+   */
+  @Input() allowNegative = false;
 
   displayHint = false;
 
   constructor() {}
 
   ngOnInit(): void {
-    this.inputFormControl.addValidators(amountValueValidator());
+    this.inputFormControl.addValidators(amountValueValidator(this.allowNegative));
     this.inputFormControl.updateValueAndValidity({ emitEvent: false });
   }
 
-  numberOnly(event: any): boolean {
-    const charCode = event.which ? event.which : event.keyCode;
-    if (charCode === 46) {
-      const value = String(this.inputFormControl.value || '');
-      if (!(value.indexOf('.') > -1)) {
-        return true;
-      }
-      return false;
-    } else if (charCode > 31 && (charCode < 48 || charCode > 57)) {
+  numberOnly(event: KeyboardEvent): boolean {
+    const charCode = event.which ?? event.keyCode;
+    const currentValue = String(this.inputFormControl?.value ?? '');
+
+    if (charCode === 46 || event.code === 'NumpadDecimal' || event.key === '.' || event.key === 'Decimal') {
+      return !currentValue.includes('.');
+    }
+
+    // The minus sign is only meaningful once, in front of the digits.
+    if (event.key === '-' || event.code === 'NumpadSubtract') {
+      const caretPosition = (event.target as HTMLInputElement | null)?.selectionStart ?? 0;
+      return this.allowNegative && !currentValue.includes('-') && caretPosition === 0;
+    }
+
+    if (charCode > 31 && (charCode < 48 || charCode > 57)) {
       return false;
     }
+
     return true;
   }
 }

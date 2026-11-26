@@ -7,9 +7,10 @@
  */
 
 /** Angular Imports */
-import { ChangeDetectionStrategy, Component, OnInit, inject, DestroyRef } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
+import { HttpErrorResponse } from '@angular/common/http';
 import { AbstractControl, FormControl, FormGroup, ValidatorFn, Validators } from '@angular/forms';
 
 /** Custom Services */
@@ -21,18 +22,19 @@ import { ReportParameter } from '../common-models/report-parameter.model';
 import { SelectOption } from '../common-models/select-option.model';
 import { Dates } from 'app/core/utils/dates';
 import { GlobalConfiguration } from 'app/system/configurations/global-configurations-tab/configuration.model';
+import { sanitizeCsvValue } from 'app/core/utils/csv.utils';
+import { downloadBlob } from 'app/core/utils/file-download.utils';
 
 import * as ExcelJS from 'exceljs';
 import { AlertService } from 'app/core/alert/alert.service';
 import { TranslateService } from '@ngx-translate/core';
-import { NgSwitch, NgSwitchCase } from '@angular/common';
-import { MatCheckbox } from '@angular/material/checkbox';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import { TableAndSmsComponent } from './table-and-sms/table-and-sms.component';
 import { ChartComponent } from './chart/chart.component';
 import { PentahoComponent } from './pentaho/pentaho.component';
 import { BirtComponent } from './birt/birt.component';
 import { STANDALONE_SHARED_IMPORTS } from 'app/standalone-shared.module';
+import { CLIENT_REPORT_ERROR_KEYS } from './client-pdf-reports';
 
 /**
  * Run report component.
@@ -41,11 +43,9 @@ import { STANDALONE_SHARED_IMPORTS } from 'app/standalone-shared.module';
   selector: 'mifosx-run-report',
   templateUrl: './run-report.component.html',
   styleUrls: ['./run-report.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     ...STANDALONE_SHARED_IMPORTS,
-    NgSwitch,
-    NgSwitchCase,
-    MatCheckbox,
     FaIconComponent,
     TableAndSmsComponent,
     ChartComponent,
@@ -61,6 +61,7 @@ export class RunReportComponent implements OnInit {
   private translateService = inject(TranslateService);
   private dateUtils = inject(Dates);
   private destroyRef = inject(DestroyRef);
+  private cdr = inject(ChangeDetectorRef);
 
   /** Minimum date allowed. */
   minDate = new Date(2000, 0, 1);
@@ -79,7 +80,7 @@ export class RunReportComponent implements OnInit {
   dataObject: any;
 
   /** Initializes new form group eportForm */
-  reportForm = new FormGroup({});
+  reportForm: FormGroup<Record<string, FormControl>> = new FormGroup({});
   /** Static Form control for decimal places in output */
   decimalChoice = new FormControl();
 
@@ -102,6 +103,18 @@ export class RunReportComponent implements OnInit {
 
   isProcessing = false;
 
+  /** Options for the decimal-precision segmented control. */
+  readonly decimalOptions: string[] = [
+    '0',
+    '1',
+    '2',
+    '3',
+    '4'
+  ];
+
+  private dateRangeValidatorApplied = false;
+  clientReportError: string | null = null;
+
   /**
    * Fetches report specifications from route params and retrieves report parameters data from `resolve`.
    * @param {ActivatedRoute} route ActivatedRoute.
@@ -120,7 +133,27 @@ export class RunReportComponent implements OnInit {
     this.route.data
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((data: { reportParameters: ReportParameter[]; configurations: any }) => {
-        this.paramData = data.reportParameters;
+        this.report.name = this.route.snapshot.params['name'];
+        this.clientReportError = null;
+        this.reportForm = new FormGroup({});
+        this.parentParameters = [];
+        this.dateRangeValidatorApplied = false;
+        // Resolver data must remain unchanged for other reports sharing DefaultClient.
+        this.paramData = data.reportParameters.map((parameter) => ({
+          ...parameter,
+          selectOptions: [...(parameter.selectOptions ?? [])],
+          childParameters: [] as ReportParameter[]
+        }));
+        this.paramData
+          .filter((parameter) => this.isClientIdParameter(parameter))
+          .forEach((parameter) => {
+            parameter.displayType = 'text';
+            parameter.label = 'Client number';
+            parameter.parentParameterName = null;
+            parameter.inputName = 'R_clientId';
+            parameter.pentahoName = 'R_clientId';
+          });
+        this.createRunReportForm();
         if (this.isTableReport()) {
           const amazonS3Config = data.configurations.globalConfiguration.find(
             (config: GlobalConfiguration) => config.name === 'amazon-s3'
@@ -155,12 +188,19 @@ export class RunReportComponent implements OnInit {
     return this.report.type === 'BIRT';
   }
 
+  isClientReport(): boolean {
+    return this.paramData.some((parameter) => this.isClientIdParameter(parameter));
+  }
+
+  isClientIdParameter(parameter: ReportParameter): boolean {
+    return this.isBirtReport() && parameter.name === 'DefaultClient' && parameter.variable === 'clientId';
+  }
+
   /**
    * Creates and sets the run report form.
    */
   ngOnInit() {
     this.maxDate = this.settingsService.maxAllowedDate;
-    this.createRunReportForm();
   }
 
   /**
@@ -171,7 +211,18 @@ export class RunReportComponent implements OnInit {
     this.paramData.forEach((param: ReportParameter) => {
       if (!param.parentParameterName) {
         // Non Child Parameter
-        this.reportForm.addControl(param.name, new FormControl('', Validators.required));
+        const control = new FormControl('', Validators.required);
+        if (this.isClientIdParameter(param)) {
+          control.addValidators([
+            Validators.pattern(/^(?=.*[1-9])[0-9]+$/),
+            () => (this.clientReportError ? { birtValidation: true } : null)
+          ]);
+          control.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+            this.clientReportError = null;
+            control.updateValueAndValidity({ emitEvent: false });
+          });
+        }
+        this.reportForm.addControl(param.name, control);
         if (param.displayType === 'select') {
           this.fetchSelectOptions(param, param.name);
         }
@@ -186,24 +237,17 @@ export class RunReportComponent implements OnInit {
     });
     if (this.isPentahoReport()) {
       this.reportForm.addControl('outputType', new FormControl('', Validators.required));
-      this.outputTypeOptions = [
-        { name: 'PDF format', value: 'PDF' },
-        { name: 'Normal format', value: 'HTML' },
-        { name: 'Excel format', value: 'XLS' },
-        { name: 'Excel 2007 format', value: 'XLSX' },
-        { name: 'CSV format', value: 'CSV' }
-      ];
+      this.outputTypeOptions = this.buildOutputTypeOptions();
       this.mapPentahoParams();
     }
     if (this.isBirtReport()) {
-      this.reportForm.addControl('outputType', new FormControl('', Validators.required));
-      this.outputTypeOptions = [
-        { name: 'PDF format', value: 'PDF' },
-        { name: 'Normal format', value: 'HTML' },
-        { name: 'Excel format', value: 'XLS' },
-        { name: 'Excel 2007 format', value: 'XLSX' },
-        { name: 'CSV format', value: 'CSV' }
-      ];
+      this.reportForm.addControl(
+        'outputType',
+        new FormControl(this.isClientReport() ? 'PDF' : '', Validators.required)
+      );
+      this.outputTypeOptions = this.buildOutputTypeOptions().filter(
+        (option) => !this.isClientReport() || option.value === 'PDF'
+      );
       this.mapBirtParams();
     }
     if (this.exportToS3Allowed) {
@@ -212,6 +256,41 @@ export class RunReportComponent implements OnInit {
     this.decimalChoice.patchValue('2');
     this.setChildControls();
     this.addDateRangeValidator();
+  }
+
+  private buildOutputTypeOptions() {
+    return [
+      { name: 'PDF format', value: 'PDF', i18nKey: 'labels.inputs.PDF format' },
+      { name: 'Normal format', value: 'HTML', i18nKey: 'labels.inputs.Normal format' },
+      { name: 'Excel format', value: 'XLS', i18nKey: 'labels.inputs.Excel format' },
+      { name: 'Excel 2007 format', value: 'XLSX', i18nKey: 'labels.inputs.Excel 2007 format' },
+      { name: 'CSV format', value: 'CSV', i18nKey: 'labels.inputs.CSV format' },
+      { name: 'XML format', value: 'XML', i18nKey: 'labels.inputs.XML format' }
+    ];
+  }
+
+  setDecimal(value: string): void {
+    this.decimalChoice.setValue(value);
+  }
+
+  setOutputType(value: string): void {
+    if (this.isClientReport() && value !== 'PDF') {
+      return;
+    }
+    const control = this.reportForm.get('outputType');
+    if (!control) {
+      return;
+    }
+    control.setValue(value as never);
+    control.markAsTouched();
+  }
+
+  toggleS3(): void {
+    const control = this.reportForm.get('exportOutputToS3');
+    if (!control) {
+      return;
+    }
+    control.setValue(!control.value as never);
   }
 
   /**
@@ -250,19 +329,60 @@ export class RunReportComponent implements OnInit {
    * Maps BIRT specific names to form-control names.
    */
   mapBirtParams() {
-    this.reportsService.getBirtParams(this.report.id).subscribe((data: any) => {
-      data.forEach((entry: any) => {
-        const param: ReportParameter = this.paramData.find((_entry: any) => _entry.name === entry.parameterName);
-        if (param && entry.reportParameterName) {
-          param.pentahoName = `R_${entry.reportParameterName}`;
-        } else if (!param) {
-          console.warn('BIRT parameter not found in paramData:', entry.parameterName);
-        }
+    const parameters = this.paramData;
+    const clientParameters = parameters.filter((parameter) => this.isClientIdParameter(parameter));
+    this.reportsService
+      .getBirtParams(this.report.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((data: any) => {
+        data.forEach((entry: any) => {
+          const param: ReportParameter = parameters.find((_entry: any) => _entry.name === entry.parameterName);
+          if (param && entry.reportParameterName) {
+            param.pentahoName = `R_${entry.reportParameterName}`;
+          } else if (!param) {
+            console.warn('BIRT parameter not found in paramData:', entry.parameterName);
+          }
+        });
+        clientParameters.forEach((parameter) => {
+          parameter.pentahoName = 'R_clientId';
+        });
+        this.cdr.markForCheck();
       });
-    });
+  }
+
+  /** Recover the form after a failed binary response; keep validation through form reattachment. */
+  async handleBirtError(response: HttpErrorResponse): Promise<void> {
+    this.isCollapsed = false;
+    this.hideBirt = true;
+    let body = response.error;
+    try {
+      if (body instanceof ArrayBuffer || Object.prototype.toString.call(body) === '[object ArrayBuffer]') {
+        body = JSON.parse(new TextDecoder().decode(body));
+      } else if (body instanceof Blob) {
+        body = JSON.parse(await body.text());
+      } else if (typeof body === 'string') {
+        body = JSON.parse(body);
+      }
+    } catch {
+      body = null;
+    }
+    const code = body?.errors?.[0]?.userMessageGlobalisationCode ?? body?.userMessageGlobalisationCode;
+    const key = CLIENT_REPORT_ERROR_KEYS[code];
+    const parameter = this.paramData.find((entry) => this.isClientIdParameter(entry));
+    if (response.status === 400 && key && parameter) {
+      this.clientReportError = this.translateService.instant(key);
+      const control = this.reportForm.get(parameter.name);
+      control?.updateValueAndValidity({ emitEvent: false });
+      control?.markAsTouched();
+    }
+    this.cdr.markForCheck();
   }
 
   addDateRangeValidator(): void {
+    if (this.dateRangeValidatorApplied) {
+      return;
+    }
+
     const dateParams = this.paramData.filter((param: ReportParameter) => param.displayType === 'date');
     const startParam = dateParams.find((param: ReportParameter) => this.isStartDateParam(param));
     const endParam = dateParams.find((param: ReportParameter) => this.isEndDateParam(param));
@@ -283,6 +403,8 @@ export class RunReportComponent implements OnInit {
     startControl.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => endControl.updateValueAndValidity({ emitEvent: false }));
+
+    this.dateRangeValidatorApplied = true;
   }
 
   endDateAfterStartValidator(startControlName: string): ValidatorFn {
@@ -325,22 +447,31 @@ export class RunReportComponent implements OnInit {
    */
   setChildControls() {
     this.parentParameters.forEach((param: ReportParameter) => {
-      this.reportForm
-        .get(param.name)
-        .valueChanges.pipe(takeUntilDestroyed(this.destroyRef))
-        .subscribe((option: any) => {
-          param.childParameters.forEach((child: ReportParameter) => {
-            if (child.displayType === 'none') {
-              this.reportForm.addControl(child.name, new FormControl(child.defaultVal));
-            } else {
-              this.reportForm.addControl(child.name, new FormControl('', Validators.required));
-            }
-            if (child.displayType === 'select') {
-              const inputstring = `${child.name}?${param.inputName}=${option.id}`;
-              this.fetchSelectOptions(child, inputstring);
-            }
-          });
+      const parentControl = this.reportForm.get(param.name);
+      if (!parentControl) {
+        return;
+      }
+      parentControl.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((option: any) => {
+        param.childParameters.forEach((child: ReportParameter) => {
+          const newControl =
+            child.displayType === 'none' ? new FormControl(child.defaultVal) : new FormControl('', Validators.required);
+
+          if (this.reportForm.contains(child.name)) {
+            this.reportForm.setControl(child.name, newControl);
+          } else {
+            this.reportForm.addControl(child.name, newControl);
+          }
+
+          if (child.displayType === 'select') {
+            child.selectOptions = [];
+            const parentId = option?.id ?? option;
+            const inputstring = `${child.name}?${param.inputName}=${parentId}`;
+            this.fetchSelectOptions(child, inputstring);
+          }
         });
+        this.addDateRangeValidator();
+        this.cdr.markForCheck();
+      });
     });
   }
 
@@ -355,6 +486,7 @@ export class RunReportComponent implements OnInit {
       if (param.selectAll === 'Y') {
         param.selectOptions.push({ id: '-1', name: 'All' });
       }
+      this.cdr.markForCheck();
     });
   }
 
@@ -412,19 +544,26 @@ export class RunReportComponent implements OnInit {
    * Core run report functionality.
    */
   run() {
+    if (this.reportForm.invalid) {
+      this.reportForm.markAllAsTouched();
+      return;
+    }
     this.isCollapsed = true;
     const userResponseValues = this.formatUserResponse(this.reportForm.value);
     let formData = {
       ...userResponseValues
     };
+    if (this.isClientReport()) {
+      formData['output-type'] = 'PDF';
+    }
     if (this.reportUsesDates) {
       let dateFormat = this.settingsService.dateFormat;
       if (this.isTableReport()) {
         dateFormat = Dates.DEFAULT_DATEFORMAT;
       }
       formData = {
-        ...userResponseValues,
-        locale: this.settingsService.language.code,
+        ...formData,
+        ...(!this.isBirtReport() && { locale: this.settingsService.language.code }),
         dateFormat: dateFormat
       };
     }
@@ -492,11 +631,11 @@ export class RunReportComponent implements OnInit {
   async exportToXLS(reportName: string, csvData: any, displayedColumns: string[]): Promise<void> {
     const fileName = `${reportName}.xlsx`;
 
-    // Format data for ExcelJS
+    // Format data for ExcelJS - sanitize all values to prevent formula injection
     const data = csvData.map((object: any) => {
       const row: Record<string, any> = {};
       for (let i = 0; i < displayedColumns.length; i++) {
-        row[displayedColumns[i]] = object.row[i];
+        row[displayedColumns[i]] = sanitizeCsvValue(object.row[i]);
       }
       return row;
     });
@@ -506,7 +645,7 @@ export class RunReportComponent implements OnInit {
     const worksheet = workbook.addWorksheet('report');
 
     // Add header
-    worksheet.addRow(displayedColumns);
+    worksheet.addRow(displayedColumns.map(sanitizeCsvValue));
 
     // Add data rows
     data.forEach((rowObj: any) => {
@@ -519,16 +658,6 @@ export class RunReportComponent implements OnInit {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     });
 
-    // Native download logic (no FileSaver)
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 0);
+    downloadBlob(blob, fileName);
   }
 }

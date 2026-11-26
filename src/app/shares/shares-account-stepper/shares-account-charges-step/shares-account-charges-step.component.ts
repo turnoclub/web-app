@@ -135,13 +135,13 @@ export class SharesAccountChargesStepComponent implements OnInit, OnChanges {
       })
     ];
     const data = {
-      title: this.translateService.instant('labels.heading.Edit Charge'),
+      title: this.translateService.instant('labels.text.Edit Charge'),
       layout: { addButtonText: 'Submit' },
       formfields: formfields
     };
     const editNoteDialogRef = this.dialog.open(FormDialogComponent, { data });
     editNoteDialogRef.afterClosed().subscribe((response: any) => {
-      if (response.data) {
+      if (response?.data) {
         const newCharge = { ...charge, amount: response.data.value.amount };
         this.chargesDataSource.splice(this.chargesDataSource.indexOf(charge), 1, newCharge);
         this.chargesDataSource = this.chargesDataSource.concat([]);
@@ -159,7 +159,7 @@ export class SharesAccountChargesStepComponent implements OnInit, OnChanges {
       data: { deleteContext: `charge ${charge.name}` }
     });
     deleteChargeDialogRef.afterClosed().subscribe((response: any) => {
-      if (response.delete) {
+      if (response?.delete) {
         this.chargesDataSource.splice(this.chargesDataSource.indexOf(charge), 1);
         this.chargesDataSource = this.chargesDataSource.concat([]);
       }

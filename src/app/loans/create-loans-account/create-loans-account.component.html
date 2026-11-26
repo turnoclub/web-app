@@ -73,6 +73,7 @@
               [loansAccountTemplate]="loansAccountTemplate"
               [loansAccountFormValid]="loansAccountFormValid"
               [loansSavingsAccountLinked]="loansSavingsAccountLinked"
+              [loanEnableDownPayment]="loansAccountTermsForm?.value.enableDownPayment"
             >
             </mifosx-loans-account-charges-step>
           </mat-step>
@@ -110,6 +111,7 @@
               [loansAccountProductTemplate]="loansAccountProductTemplate"
               [loansAccount]="loansAccount"
               [loanProductsBasicDetails]="loanProductsBasicDetails"
+              [submitting]="isSubmitting"
               (submitEvent)="submit()"
             >
             </mifosx-loans-account-preview-step>

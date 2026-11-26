@@ -24,6 +24,7 @@ import { LoansAccountPreviewStepComponent } from '../loans-account-stepper/loans
 import { STANDALONE_SHARED_IMPORTS } from 'app/standalone-shared.module';
 import { LoanProductBasicDetails } from '../models/loan-product.model';
 import { LoanProductBaseComponent } from 'app/products/loan-products/common/loan-product-base.component';
+import { isSemiMonthly } from 'app/shared/loan/semi-monthly/semi-monthly';
 
 /**
  * Edit Loans
@@ -57,7 +58,7 @@ export class EditLoansAccountComponent extends LoanProductBaseComponent {
   @ViewChild(LoansAccountDetailsStepComponent, { static: true })
   loansAccountDetailsStep: LoansAccountDetailsStepComponent;
   @ViewChild(LoansAccountTermsStepComponent, { static: true }) loansAccountTermsStep: LoansAccountTermsStepComponent;
-  @ViewChild(LoansAccountChargesStepComponent, { static: true })
+  @ViewChild(LoansAccountChargesStepComponent)
   loansAccountChargesStep: LoansAccountChargesStepComponent;
 
   loansAccountAndTemplate: any;
@@ -89,9 +90,11 @@ export class EditLoansAccountComponent extends LoanProductBaseComponent {
           this.loansAccountProductTemplate = data.loansAccountAndTemplate;
         } else if (this.loanProductService.isWorkingCapital) {
           this.loansAccountProductTemplate = data.loansAccountAndTemplate;
+          // The working capital loan details endpoint serializes the client and product
+          // as flat fields (clientId/loanProductId) instead of nested objects.
           this.getWorkingCapitalLoanProductTemplate(
-            this.loansAccountProductTemplate.client.id,
-            this.loansAccountProductTemplate.product.id
+            this.loansAccountProductTemplate.client?.id ?? this.loansAccountProductTemplate.clientId,
+            this.loansAccountProductTemplate.product?.id ?? this.loansAccountProductTemplate.loanProductId
           );
         }
         this.loanProductsBasicDetails = data.loanProductsBasicDetails;
@@ -115,7 +118,8 @@ export class EditLoansAccountComponent extends LoanProductBaseComponent {
         delinquencyBucketOptions: templateData.delinquencyBucketOptions,
         fundOptions: templateData.fundOptions,
         periodFrequencyTypeOptions: templateData.periodFrequencyTypeOptions,
-        delinquencyStartTypeOptions: templateData.delinquencyStartTypeOptions
+        delinquencyStartTypeOptions: templateData.delinquencyStartTypeOptions,
+        breachStartTypeOptions: templateData.breachStartTypeOptions
       };
     }
     if (this.loansAccountProductTemplate.loanProductId) {
@@ -157,7 +161,7 @@ export class EditLoansAccountComponent extends LoanProductBaseComponent {
         (!this.loansAccountDetailsForm.pristine ||
           !this.loansAccountTermsForm.pristine ||
           !this.loansAccountTermsStep.pristine ||
-          !this.loansAccountChargesStep?.pristine)
+          this.loansAccountChargesStep?.pristine === false)
       );
     } else if (this.loanProductService.isWorkingCapital) {
       return (
@@ -244,10 +248,11 @@ export class EditLoansAccountComponent extends LoanProductBaseComponent {
       loanType
     };
     delete loansAccountData.isValid;
-    if (loansAccountData.syncRepaymentsWithMeeting) {
+    // Semi-monthly loans cannot be linked to a meeting calendar (the backend rejects `calendarId`).
+    if (loansAccountData.syncRepaymentsWithMeeting && !isSemiMonthly(loansAccountData.repaymentFrequencyType)) {
       loansAccountData.calendarId = this.loansAccountProductTemplate.calendarOptions[0].id;
-      delete loansAccountData.syncRepaymentsWithMeeting;
     }
+    delete loansAccountData.syncRepaymentsWithMeeting;
 
     if (loansAccountData.recalculationRestFrequencyDate) {
       loansAccountData.recalculationRestFrequencyDate = this.dateUtils.formatDate(
@@ -265,14 +270,11 @@ export class EditLoansAccountComponent extends LoanProductBaseComponent {
     ) {
       delete loansAccountData.isFloatingInterestRate;
     }
-    loansAccountData.principal = loansAccountData.principalAmount;
+    // Send the principal as a number: Fineract reads a text amount with the request locale,
+    // so "1500.75" would be saved as 150075 in es, de or pt.
+    loansAccountData.principal = Number(loansAccountData.principalAmount);
     delete loansAccountData.principalAmount;
     delete loansAccountData.multiDisburseLoan;
-
-    // In Fineract, the POST and PUT endpoints for /v1/loans have a typo in the field
-    // allowPartialPeriodInterestCalculation. Until that is fixed, we need to replace the field name in the payload.
-    loansAccountData.allowPartialPeriodInterestCalculation = loansAccountData.allowPartialPeriodInterestCalculation;
-    delete loansAccountData.allowPartialPeriodInterestCalculation;
 
     this.loansService
       .updateLoansAccount(this.loanProductService.loanAccountPath, this.loanId, loansAccountData)
@@ -291,7 +293,7 @@ export class EditLoansAccountComponent extends LoanProductBaseComponent {
     const dateFormat = this.settingsService.dateFormat;
     const payload = {
       ...this.loansAccount,
-      clientId: this.loansAccountProductTemplate.client.id,
+      clientId: this.loansAccountProductTemplate.client?.id ?? this.loansAccountProductTemplate.clientId,
       submittedOnDate: this.dateUtils.formatDate(this.loansAccount.submittedOnDate, dateFormat),
       expectedDisbursementDate: this.dateUtils.formatDate(this.loansAccount.expectedDisbursementDate, dateFormat),
       locale,
@@ -317,17 +319,25 @@ export class EditLoansAccountComponent extends LoanProductBaseComponent {
       ) {
         delete payload['discount'];
       }
-    }
-
-    // No Empty values to be sent
-    [
-      'delinquencyGraceDays',
-      'delinquencyStartType'
-    ].forEach((attr: string) => {
-      if (payload[attr] === null || payload[attr] === '') {
-        delete payload[attr];
+      if (
+        !Object.hasOwn(this.productDetails.allowAttributeOverrides, 'breach') ||
+        this.productDetails.allowAttributeOverrides.breach === false
+      ) {
+        // Locked values from getRawValue() must be absent — BE rejects presence even as null.
+        delete payload['breachId'];
+        delete payload['nearBreachId'];
+        delete payload['breachGraceDays'];
+        delete payload['breachStartType'];
       }
-    });
+      if (
+        !Object.hasOwn(this.productDetails.allowAttributeOverrides, 'delinquencyBucketClassification') ||
+        this.productDetails.allowAttributeOverrides.delinquencyBucketClassification === false
+      ) {
+        delete payload['delinquencyBucketId'];
+        delete payload['delinquencyGraceDays'];
+        delete payload['delinquencyStartType'];
+      }
+    }
 
     this.loansService
       .updateLoansAccount(this.loanProductService.loanAccountPath, this.loanId, payload)

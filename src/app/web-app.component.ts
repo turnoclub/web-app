@@ -8,7 +8,15 @@
 
 /* eslint-disable @angular-eslint/prefer-inject */
 /** Angular Imports */
-import { ChangeDetectionStrategy, Component, OnInit, HostListener, HostBinding, OnDestroy } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  HostListener,
+  HostBinding,
+  OnDestroy,
+  inject
+} from '@angular/core';
 import { Router, NavigationEnd, ActivatedRoute } from '@angular/router';
 import { Title } from '@angular/platform-browser';
 import { MatSnackBar, MatSnackBarRef } from '@angular/material/snack-bar';
@@ -33,19 +41,22 @@ import { SettingsService } from './settings/settings.service';
 import { DocumentationLinksService } from 'app/shared/services/documentation-links.service';
 import { IdleTimeoutService } from './home/timeout-dialog/idle-timeout.service';
 import { SessionTimeoutDialogComponent } from './home/timeout-dialog/session-timeout-dialog.component';
+import { LogoutDialogComponent } from './shared/logout-dialog/logout-dialog.component';
 
 /** Custom Items */
 import { Alert } from './core/alert/alert.model';
-import { KeyboardShortcutsConfiguration } from './keyboards-shortcut-config';
+import { KeyboardShortcutsConfiguration, ButtonCombination } from './keyboards-shortcut-config';
 import { Dates } from './core/utils/dates';
 import { animate, style, transition, trigger } from '@angular/animations';
 import { I18nService } from './core/i18n/i18n.service';
+import { DocumentLanguageService } from './core/i18n/document-language.service';
 import { ThemingService } from './shared/theme-toggle/theming.service';
 
 /** Initialize Logger */
 const log = new Logger('MifosX');
 
 import { registerLocaleData } from '@angular/common';
+import localeAZ from '@angular/common/locales/az';
 import localeCS from '@angular/common/locales/cs';
 import localeEN from '@angular/common/locales/en';
 import localeES from '@angular/common/locales/es';
@@ -60,6 +71,7 @@ import localePT from '@angular/common/locales/pt';
 import localeSW from '@angular/common/locales/sw';
 import { STANDALONE_SHARED_IMPORTS } from 'app/standalone-shared.module';
 
+registerLocaleData(localeAZ);
 registerLocaleData(localeCS);
 registerLocaleData(localeEN);
 registerLocaleData(localeES);
@@ -101,6 +113,7 @@ export class WebAppComponent implements OnInit, OnDestroy {
   buttonConfig: KeyboardShortcutsConfiguration;
 
   i18nService: I18nService;
+  private documentLanguageService = inject(DocumentLanguageService);
 
   private authSubscription: Subscription;
   private destroy$ = new Subject<void>();
@@ -170,6 +183,9 @@ export class WebAppComponent implements OnInit, OnDestroy {
     } else {
       this.translateService.use(environment.defaultLanguage);
     }
+    if (this.translateService.currentLang) {
+      this.documentLanguageService.setDocumentLanguage(this.translateService.currentLang);
+    }
 
     this.i18nService = new I18nService(this.translateService);
 
@@ -189,12 +205,22 @@ export class WebAppComponent implements OnInit, OnDestroy {
         takeUntil(this.destroy$)
       )
       .subscribe((event) => {
-        const title = event['title'] ? `labels.text.${event['title']}` : 'APP_NAME';
+        const rawTitle = event['title'];
+        if (!rawTitle) {
+          this.i18nService
+            .translate('APP_NAME')
+            .pipe(take(1))
+            .subscribe((t: any) => this.titleService.setTitle(t));
+          return;
+        }
+        const translationKey = rawTitle.includes('.') ? rawTitle : `labels.text.${rawTitle}`;
         this.i18nService
-          .translate(title)
+          .translate(translationKey)
           .pipe(take(1))
-          .subscribe((titleTranslated: any) => {
-            this.titleService.setTitle(titleTranslated);
+          .subscribe((translated: any) => {
+            // If the translation key was not found, ngx-translate returns the key itself
+            const finalTitle = translated === translationKey ? rawTitle : translated;
+            this.titleService.setTitle(finalTitle);
           });
       });
 
@@ -235,7 +261,7 @@ export class WebAppComponent implements OnInit, OnDestroy {
     // Set default max date picker as Today
     this.settingsService.setBusinessDate(this.dateUtils.formatDate(new Date(), SettingsService.businessDateFormat));
     // Set the server list from the env var FINERACT_API_URLS, but avoid overwriting "Add new server" user choice
-    if (!this.settingsService.servers) {
+    if (!this.settingsService.servers?.length) {
       this.settingsService.setServers(environment.baseApiUrls.split(','));
     }
     // Set the Tenant Identifier(s) list from the env var
@@ -243,6 +269,18 @@ export class WebAppComponent implements OnInit, OnDestroy {
       this.settingsService.setTenantIdentifier(environment.fineractPlatformTenantId || 'default');
     }
     this.settingsService.setTenantIdentifiers(environment.fineractPlatformTenantIds.split(','));
+
+    // Apply the tenant's brand colour: the cached value is painted first so
+    // there is no flash, then refreshed from the server. Read anonymously, so
+    // it does not wait for authentication and the login screen is branded too.
+    //
+    // Deliberately after the server and tenant are settled above: the read
+    // carries no credentials, so the tenant header is the only thing saying
+    // whose branding to return. Re-run when the session changes, since signing
+    // in can switch tenant; it is a no-op for a tenant already read.
+    this.authenticationService.isAuthenticated$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => this.themeStorageService.loadTenantTheme());
 
     // Subscribe to session timeout If IdleTimeout is higher than 0 (zero)
     if (environment.session.timeout.idleTimeout > 0) {
@@ -322,49 +360,177 @@ export class WebAppComponent implements OnInit, OnDestroy {
     this.authenticationService.logout().subscribe(() => this.router.navigate(['/login'], { replaceUrl: true }));
   }
 
+  /**
+   * Opens the logout confirmation dialog and only runs the existing logout flow
+   * once the operator confirms. Cancelling or dismissing the dialog preserves
+   * the authenticated session. Automatic flows (such as the session idle
+   * timeout) keep calling {@link logout} directly and are never interrupted by
+   * this dialog.
+   */
+  confirmLogout() {
+    this.dialog
+      .open(LogoutDialogComponent)
+      .afterClosed()
+      .pipe(take(1))
+      .subscribe((confirmed: boolean) => {
+        if (confirmed) {
+          this.logout();
+        }
+      });
+  }
+
   help() {
     this.documentationLinks.open('userManual');
   }
 
-  // Monitor all keyboard events and excute keyboard shortcuts
+  // Monitor all keyboard events and execute keyboard shortcuts
   @HostListener('window:keydown', ['$event'])
   onKeydownHandler(event: KeyboardEvent) {
-    const routeD = this.buttonConfig.buttonCombinations.find(
-      (x) =>
-        x.ctrlKey === event.ctrlKey && x.shiftKey === event.shiftKey && x.altKey === event.altKey && x.key === event.key
-    );
-    if (!(routeD === undefined)) {
-      switch (routeD.id) {
-        case 'logout':
-          this.logout();
-          break;
-        case 'help':
-          this.help();
-          break;
-        case 'runReport':
-          document.getElementById('runReport').click();
-          break;
-        case 'cancel':
-          const cancelButtons = document.querySelectorAll('button');
-          const filteredcancelButtons = Array.prototype.filter.call(cancelButtons, function (el: any) {
-            return el.textContent.trim() === 'Cancel';
-          });
-          if (filteredcancelButtons.length > 0) {
-            filteredcancelButtons[0].click();
-          }
-          break;
-        case 'submit':
-          const submitButton = document.querySelectorAll('button');
-          const filteredSubmitButton = Array.prototype.filter.call(submitButton, function (el: any) {
-            return el.textContent.trim() === 'Submit';
-          });
-          if (filteredSubmitButton.length > 0) {
-            filteredSubmitButton[0].click();
-          }
-          break;
-        default:
-          this.router.navigate([routeD.route], { relativeTo: this.activatedRoute });
-      }
+    if (event.isComposing) {
+      return;
     }
+
+    const isEditable = this.isEditableTarget(event.target);
+
+    // In editable targets (inputs, textareas, etc.), only allow Submit and Cancel.
+    // On non-macOS platforms (Windows/Linux), require a plain Latin letter to keep
+    // AltGr characters like ś and € safe. On macOS, Option modifies event.key
+    // (e.g. Ctrl+Option+S reports 'ß' and Ctrl+Option+X reports '≈'), so skip the
+    // Latin-letter check to let Submit and Cancel resolve through the code fallback.
+    if (isEditable && !this.isMacOS() && !/^[a-zA-Z]$/.test(event.key)) {
+      return;
+    }
+
+    const routeD = this.findShortcut(event);
+
+    if (!routeD) {
+      return;
+    }
+
+    // In editable targets, only Submit and Cancel shortcuts are permitted.
+    if (isEditable && routeD.id !== 'submit' && routeD.id !== 'cancel') {
+      return;
+    }
+
+    // The event is an application shortcut, so its browser default must not run.
+    // This happens before dispatch so a missing optional DOM target still cannot
+    // let the browser perform an unrelated action.
+    event.preventDefault();
+
+    switch (routeD.id) {
+      case 'logout':
+        this.confirmLogout();
+        break;
+      case 'help':
+        this.help();
+        break;
+      case 'runReport':
+        // The Run Report button in run-report.component.html uses the lowercase id.
+        document.getElementById('runreport')?.click();
+        break;
+      case 'cancel':
+        const cancelButtons = document.querySelectorAll('button');
+        const filteredcancelButtons = Array.prototype.filter.call(cancelButtons, function (el: any) {
+          return el.textContent.trim() === 'Cancel';
+        });
+        if (filteredcancelButtons.length > 0) {
+          filteredcancelButtons[0].click();
+        }
+        break;
+      case 'submit':
+        const submitButton = document.querySelectorAll('button');
+        const filteredSubmitButton = Array.prototype.filter.call(submitButton, function (el: any) {
+          return el.textContent.trim() === 'Submit';
+        });
+        if (filteredSubmitButton.length > 0) {
+          filteredSubmitButton[0].click();
+        }
+        break;
+      default:
+        this.router.navigate([routeD.route], { relativeTo: this.activatedRoute });
+    }
+  }
+
+  /**
+   * Resolves the configured shortcut for a keyboard event.
+   *
+   * The character produced by the event wins, because that is what the operator
+   * sees on their own layout. The physical `code` is only a fallback on macOS for
+   * keys that do not produce a Latin letter, which is how macOS reports characters
+   * while Option is held (`⌥N` yields `˜`). On other platforms like Windows and
+   * Linux, Ctrl+Alt can represent AltGr, so falling back to `code` could trigger
+   * shortcuts on layout-specific AltGr characters (such as AltGr+E producing `€`).
+   */
+  private findShortcut(event: KeyboardEvent): ButtonCombination | undefined {
+    if (event.metaKey) {
+      return undefined;
+    }
+
+    const candidates = this.buttonConfig.buttonCombinations.filter(
+      (x) => x.ctrlKey === event.ctrlKey && x.shiftKey === event.shiftKey && x.altKey === event.altKey
+    );
+
+    const key = event.key.toLowerCase();
+    const keyMatch = candidates.find((x) => x.key.toLowerCase() === key);
+    if (keyMatch) {
+      return keyMatch;
+    }
+
+    if (/^[a-z]$/.test(key)) {
+      return undefined;
+    }
+
+    if (!this.isMacOS()) {
+      return undefined;
+    }
+
+    return candidates.find((x) => event.code === `Key${x.key.toUpperCase()}`);
+  }
+
+  /**
+   * Returns true when the client is running on macOS.
+   * Limiting the physical code fallback to macOS prevents AltGr key combinations
+   * on Windows and Linux from erroneously triggering shortcuts.
+   */
+  isMacOS(): boolean {
+    if (typeof navigator === 'undefined') {
+      return false;
+    }
+    const nav = navigator as { userAgentData?: { platform?: string }; platform?: string; userAgent?: string };
+    const platform = (nav.userAgentData?.platform || nav.platform || nav.userAgent || '').toLowerCase();
+    return platform.includes('mac') || platform.includes('darwin');
+  }
+
+  /**
+   * Returns true when a keyboard event comes from a control the user can edit.
+   * Shortcuts must not run while text is being entered, and contenteditable
+   * events may target a nested element rather than the editable container.
+   */
+  private isEditableTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) {
+      return false;
+    }
+
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') {
+      return true;
+    }
+
+    // Angular Material renders mat-select as a custom element with a combobox role
+    // rather than a native <select>, and ARIA text controls may wrap non-editable
+    // elements. Form controls like checkboxes, radios, and slide toggles are also guarded.
+    if (
+      target.closest(
+        'mat-select, mat-checkbox, mat-radio-button, mat-slide-toggle, [role="combobox"], [role="textbox"], [role="searchbox"], [role="checkbox"], [role="radio"], [role="switch"]'
+      ) !== null
+    ) {
+      return true;
+    }
+
+    if (target.isContentEditable) {
+      return true;
+    }
+
+    const editableAncestor = target.closest('[contenteditable]');
+    return editableAncestor !== null && editableAncestor.getAttribute('contenteditable') !== 'false';
   }
 }

@@ -121,7 +121,7 @@ export class SharesAccountViewComponent implements OnInit {
       charges.forEach((charge: any) => {
         if (charge.name === 'Annual fee - INR') {
           this.buttonConfig.addOption({
-            name: 'Apply Anuual Fees',
+            name: 'Apply Annual Fees',
             taskPermissionName: 'APPLYANNUALFEE_SAVINGSACCOUNT'
           });
         }
@@ -179,7 +179,7 @@ export class SharesAccountViewComponent implements OnInit {
       data: { deleteContext: `shares account with id: ${this.sharesAccountData.id}` }
     });
     deleteSharesAccountDialogRef.afterClosed().subscribe((response: any) => {
-      if (response.delete) {
+      if (response?.delete) {
         this.sharesService.deleteSharesAccount(this.sharesAccountData.id).subscribe(() => {
           this.router.navigate(['../../'], { relativeTo: this.route });
         });

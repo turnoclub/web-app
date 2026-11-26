@@ -19,6 +19,9 @@
       </mat-card-title>
     }
 
+    @if (financialError) {
+      <p role="alert">{{ financialError | translate }}</p>
+    }
     <mat-stepper #stepper linear orientation="vertical">
       <!-- Step 1: Transaction Details -->
       <mat-step [stepControl]="savingAccountTransactionForm">
@@ -52,6 +55,7 @@
                 [isRequired]="true"
                 [inputFormControl]="savingAccountTransactionForm.controls.transactionAmount"
                 [inputLabel]="'Transaction Amount'"
+                [minVal]="minimumTransactionAmount"
               >
               </mifosx-input-amount>
 
@@ -92,7 +96,7 @@
               @if (addPaymentDetailsFlag) {
                 <mat-form-field>
                   <mat-label>{{ 'labels.inputs.Cheque' | translate }}</mat-label>
-                  <input type="number" formControlName="checkNumber" matInput />
+                  <input formControlName="checkNumber" matInput />
                 </mat-form-field>
               }
 

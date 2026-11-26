@@ -14,6 +14,7 @@ import { Subscription } from 'rxjs';
 import moment from 'moment';
 
 // Load moment.js locale data for all supported languages
+import 'moment/locale/az'; // Azerbaijani
 import 'moment/locale/ne'; // Nepali
 import 'moment/locale/es'; // Spanish
 import 'moment/locale/de'; // German
@@ -71,6 +72,6 @@ export class DateFormatPipe implements PipeTransform, OnDestroy {
       return dateVal.format(defaultDateFormat);
     }
 
-    return dateVal.format(dateFormat);
+    return dateVal.format(this.dateUtils.angularToMomentFormat(dateFormat));
   }
 }

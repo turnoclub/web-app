@@ -9,23 +9,13 @@
 /** Angular Imports */
 import { ChangeDetectionStrategy, Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Router } from '@angular/router';
-import { take } from 'rxjs/operators';
-/**
- * Interface for version information.
- */
-export interface VersionInfo {
-  tenant?: string;
-  mifos?: string;
-  fineract?: {
-    version?: string;
-  };
-}
+import { Router, ActivatedRoute } from '@angular/router';
 
 /** Custom Models */
 import { Alert } from '../core/alert/alert.model';
 
 /** Custom Services */
+import { AuthenticationService } from '../core/authentication/authentication.service';
 import { AlertService } from '../core/alert/alert.service';
 import { ThemingService } from '../shared/theme-toggle/theming.service';
 import { TranslateService } from '@ngx-translate/core';
@@ -44,8 +34,9 @@ import { MatMenuTrigger, MatMenu, MatMenuItem } from '@angular/material/menu';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import { STANDALONE_SHARED_IMPORTS } from 'app/standalone-shared.module';
 import { M3IconComponent } from '../shared/m3-ui/m3-icon/m3-icon.component';
+import { ConnectionCardComponent } from './connection-card/connection-card.component';
 
-import { VersionService } from '../system/version.service';
+import { sanitizeReturnUrl } from '../core/utils/return-url.utils';
 
 /**
  * Login component.
@@ -67,14 +58,15 @@ import { VersionService } from '../system/version.service';
     FaIconComponent,
     MatMenu,
     MatMenuItem,
-    M3IconComponent
+    M3IconComponent,
+    ConnectionCardComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class LoginComponent implements OnInit {
   /** Whether to show the tenant selector dropdown */
   showTenantSelector = true;
-  /** Show version info table if env allows */
+  /** Show the Connection card if env allows */
   displayBackendInfo = environment.displayBackEndInfo !== 'false';
   /** Production mode - minimal hero with branding only */
   productionMode = environment.productionMode === true;
@@ -83,21 +75,21 @@ export class LoginComponent implements OnInit {
   private settingsService = inject(SettingsService);
   private themingService = inject(ThemingService);
   private router = inject(Router);
-  private versionService = inject(VersionService);
+  private route = inject(ActivatedRoute);
   private translateService = inject(TranslateService);
   private destroyRef = inject(DestroyRef);
+  private authenticationService = inject(AuthenticationService);
 
   public environment = environment;
 
-  /** Version info for display */
-  versions: VersionInfo = {};
-  /** Server info for display */
-  server: string = '';
+  /** Selected server, read on every check so a new selection shows up straight away. */
+  get server(): string {
+    return this.settingsService.server;
+  }
 
-  /** Get tenant display name with first letter capitalized */
-  get tenantDisplayName(): string {
-    const tenant = this.versions?.tenant || this.settingsService.tenantIdentifier || 'default';
-    return tenant.charAt(0).toUpperCase() + tenant.slice(1).toLowerCase();
+  /** Selected tenant, read on every check so a new selection shows up straight away. */
+  get tenantIdentifier(): string {
+    return this.settingsService.tenantIdentifier;
   }
 
   /** True if password requires a reset. */
@@ -113,6 +105,11 @@ export class LoginComponent implements OnInit {
    * Subscribes to alert event of alert service and theme changes.
    */
   ngOnInit() {
+    if (this.authenticationService.isAuthenticated()) {
+      this.router.navigateByUrl(this.preservedReturnUrl(), { replaceUrl: true });
+      return;
+    }
+
     this.showTenantSelector = this.calculateTenantSelectorVisibility();
     this.updateLogo();
     this.themeDarkEnabled = this.settingsService.themeDarkEnabled;
@@ -136,40 +133,19 @@ export class LoginComponent implements OnInit {
       } else if (alertType === this.translateService.instant('errors.auth.success.type')) {
         this.resetPassword = false;
         this.twoFactorAuthenticationRequired = false;
-        this.router.navigate(['/'], { replaceUrl: true });
+        this.router.navigateByUrl(this.preservedReturnUrl(), { replaceUrl: true });
       } else if (alertType === this.translateService.instant('errors.tenant.changed.type')) {
         this.updateLogo();
       }
     });
+  }
 
-    // Load version info for table
-    this.versionService
-      .getBackendInfo()
-      .pipe(take(1))
-      .subscribe(
-        (info: any) => {
-          this.versions = {
-            tenant: this.settingsService.tenantIdentifier,
-            mifos: info?.mifos || info?.mifosX || info?.mifos_x || info?.version || environment.version,
-            fineract:
-              typeof info?.fineract === 'object' && info?.fineract !== null
-                ? { version: info.fineract.version }
-                : typeof info?.fineract === 'string'
-                  ? { version: info.fineract }
-                  : info?.fineractX || info?.fineract_x
-                    ? { version: info.fineractX || info.fineract_x }
-                    : { version: info?.git?.build?.version }
-          };
-        },
-        () => {
-          this.versions = {
-            tenant: this.settingsService.tenantIdentifier,
-            mifos: environment.version,
-            fineract: { version: '' }
-          };
-        }
-      );
-    this.server = this.settingsService.server;
+  /**
+   * Destination the authentication guard preserved before redirecting here.
+   * @returns {string} The requested route, or the dashboard when none is safe to restore.
+   */
+  private preservedReturnUrl(): string {
+    return sanitizeReturnUrl(this.route.snapshot.queryParamMap.get('returnUrl'));
   }
 
   reloadSettings(): void {
@@ -187,10 +163,20 @@ export class LoginComponent implements OnInit {
     if (environment.displayTenantSelector === 'false') {
       return false;
     }
-    const tenantIds = environment.fineractPlatformTenantIds
-      .split(',')
-      .map((id) => id.trim())
-      .filter((id) => id.length > 0);
+    // The configured list, plus any identifier tenant management has seen on this installation, so
+    // a deployment that registers tenants through the API does not have to also list them in the
+    // environment as well. Without that feature the second list is empty and this is the configured
+    // list unchanged.
+    const configured: string[] = environment.fineractPlatformTenantIds.split(',');
+    const known: string[] = this.settingsService.tenantIdentifiers ?? [];
+    const tenantIds = [
+      ...new Set([
+        ...configured,
+        ...known
+      ])
+    ]
+      .map((id: string) => id.trim())
+      .filter((id: string) => id.length > 0);
     if (tenantIds.length === 0 || (tenantIds.length === 1 && tenantIds[0] === 'default')) {
       return false;
     }

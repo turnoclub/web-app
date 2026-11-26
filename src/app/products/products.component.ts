@@ -17,6 +17,7 @@ import {
   inject
 } from '@angular/core';
 import { Router } from '@angular/router';
+import { InvestmentAccessService } from './investment-products/investment-access.service';
 
 /** Custom Services */
 import { ConfigurationWizardService } from '../configuration-wizard/configuration-wizard.service';
@@ -45,6 +46,7 @@ import { STANDALONE_SHARED_IMPORTS } from 'app/standalone-shared.module';
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ProductsComponent implements AfterViewInit {
+  investmentAccess = inject(InvestmentAccessService);
   private router = inject(Router);
   private configurationWizardService = inject(ConfigurationWizardService);
   private popoverService = inject(PopoverService);
@@ -73,8 +75,8 @@ export class ProductsComponent implements AfterViewInit {
   @ViewChild('recurringDepositProducts') recurringDepositProducts: ElementRef<any>;
   /* Template for popover on recurring deposit products */
   @ViewChild('templateRecurringDepositProducts') templateRecurringDepositProducts: TemplateRef<any>;
-  // Initialize an array of 13 boolean values, all set to false
-  arrowBooleans: boolean[] = new Array(13).fill(false);
+  // Initialize an array of 14 boolean values, all set to false
+  arrowBooleans: boolean[] = new Array(14).fill(false);
 
   /**
    * To show popover.

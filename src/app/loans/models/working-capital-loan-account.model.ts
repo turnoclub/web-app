@@ -13,5 +13,25 @@ export interface PeriodPaymentRateChange {
   previousRate: number;
   newRate: number;
   reversed: boolean;
-  createdDate: number[];
+  reversedOnDate?: number[] | null;
+  submittedOnDate: number[];
+  /** Annual EIR (%) of the segment this change opened, snapshotted when booked. Null on older rows. */
+  calculatedAnnualEir?: number | null;
+  dailyPaymentAmount?: number | null;
+  segmentTerm?: number | null;
+}
+
+export interface BreachSchedule {
+  id: number;
+  loanId: number;
+  periodNumber: number;
+  fromDate: Date;
+  toDate: Date;
+  numberOfDays: number;
+  minPaymentAmount: number;
+  outstandingAmount: number;
+  nearBreach?: boolean;
+  breach?: boolean;
+  /** True when the evaluation period was flagged by a breach reset action */
+  reset?: boolean;
 }

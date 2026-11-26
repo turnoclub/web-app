@@ -7,7 +7,15 @@
  */
 
 /** Angular Imports */
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, inject, ViewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  DestroyRef,
+  OnInit,
+  inject,
+  ViewChild
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormGroup, FormBuilder, Validators, FormControl, ReactiveFormsModule } from '@angular/forms';
 import { Router, ActivatedRoute, RouterLink } from '@angular/router';
@@ -15,6 +23,7 @@ import { MatStepper, MatStepperModule } from '@angular/material/stepper';
 import { finalize } from 'rxjs';
 
 /** Custom Services */
+import { financialRestrictionError } from '../../shared/financial-restriction-error';
 import { SavingsService } from '../../savings.service';
 import { SettingsService } from 'app/settings/settings.service';
 import { Dates } from 'app/core/utils/dates';
@@ -24,6 +33,7 @@ import { MatSlideToggle } from '@angular/material/slide-toggle';
 import { CdkTextareaAutosize } from '@angular/cdk/text-field';
 import { STANDALONE_SHARED_IMPORTS } from 'app/standalone-shared.module';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
+import { MatCardTitle } from '@angular/material/card';
 
 /**
  * Create savings account transactions component.
@@ -38,7 +48,8 @@ import { FaIconComponent } from '@fortawesome/angular-fontawesome';
     MatSlideToggle,
     CdkTextareaAutosize,
     MatStepperModule,
-    FaIconComponent
+    FaIconComponent,
+    MatCardTitle
   ],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
@@ -52,6 +63,8 @@ export class SavingsAccountTransactionsComponent implements OnInit {
   private savingsService = inject(SavingsService);
   private settingsService = inject(SettingsService);
   private destroyRef = inject(DestroyRef);
+  private cdr = inject(ChangeDetectorRef);
+  financialError: string | null = null;
 
   /** Minimum Due Date allowed. */
   minDate = new Date(2000, 0, 1);
@@ -80,6 +93,11 @@ export class SavingsAccountTransactionsComponent implements OnInit {
   transactionResponse: any = null;
   /** Flag to track if transaction is being submitted */
   isSubmitting: boolean = false;
+
+  get minimumTransactionAmount(): number {
+    const decimalPlaces = Math.min(this.currency?.decimalPlaces ?? 6, 6);
+    return 1 / Math.pow(10, decimalPlaces);
+  }
 
   /**
    * Retrieves the Saving Account transaction template data from `resolve`.
@@ -121,7 +139,10 @@ export class SavingsAccountTransactionsComponent implements OnInit {
       ],
       transactionAmount: [
         0,
-        Validators.required
+        [
+          Validators.required,
+          Validators.min(this.minimumTransactionAmount)
+        ]
       ],
       paymentTypeId: [
         '',
@@ -173,6 +194,7 @@ export class SavingsAccountTransactionsComponent implements OnInit {
   confirmTransaction() {
     if (this.isSubmitting) return;
     this.isSubmitting = true;
+    this.financialError = null;
     const savingAccountTransactionFormData = this.savingAccountTransactionForm.value;
     const locale = this.settingsService.language.code;
     const dateFormat = this.settingsService.dateFormat;
@@ -188,10 +210,21 @@ export class SavingsAccountTransactionsComponent implements OnInit {
     data['transactionAmount'] = data['transactionAmount'] * 1;
     this.savingsService
       .executeSavingsAccountTransactionsCommand(this.savingAccountId, this.transactionCommand, data)
-      .pipe(finalize(() => (this.isSubmitting = false)))
-      .subscribe((res) => {
-        this.transactionResponse = res;
-        this.stepper.next();
+      .pipe(
+        finalize(() => {
+          this.isSubmitting = false;
+          this.cdr.markForCheck();
+        })
+      )
+      .subscribe({
+        next: (res) => {
+          this.transactionResponse = res;
+          this.stepper.next();
+        },
+        error: (error) => {
+          // The shared interceptor handles unknown failures. Keep known restrictions visible without retrying.
+          this.financialError = financialRestrictionError(error);
+        }
       });
   }
 

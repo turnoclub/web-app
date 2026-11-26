@@ -40,7 +40,7 @@ export class ReportsService {
    * @returns {Observable<ReportParameter[]>}
    */
   getReportParams(reportName: string): Observable<ReportParameter[]> {
-    const httpParams = new HttpParams().set('R_reportListing', `'${reportName}'`).set('parameterType', 'true');
+    const httpParams = new HttpParams().set('R_reportListing', `${reportName}`).set('parameterType', 'true');
     return this.http
       .get(`/runreports/FullParameterList`, { params: httpParams })
       .pipe(map((response: any) => response.data.map((entry: any) => new ReportParameter(entry.row))));
@@ -168,6 +168,8 @@ export class ReportsService {
     ] of Object.entries(formData)) {
       httpParams = httpParams.set(key, value);
     }
+    // Fineract expects underscore-separated locales for BIRT, even when the UI uses language tags.
+    httpParams = httpParams.set('locale', (httpParams.get('locale') ?? locale).replace(/-/g, '_'));
     return this.http.get(`/runreports/${reportName}`, {
       responseType: 'arraybuffer',
       observe: 'response',

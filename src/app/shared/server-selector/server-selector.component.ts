@@ -13,7 +13,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { UntypedFormBuilder, Validators } from '@angular/forms';
 /** Custom Services */
 import { SettingsService } from 'app/settings/settings.service';
-import { MatFormField, MatLabel, MatPrefix, MatError } from '@angular/material/form-field';
+import { MatFormField, MatLabel, MatPrefix, MatError, SubscriptSizing } from '@angular/material/form-field';
 import { MatIcon } from '@angular/material/icon';
 import { STANDALONE_SHARED_IMPORTS } from 'app/standalone-shared.module';
 
@@ -42,6 +42,13 @@ export class ServerSelectorComponent implements OnInit {
   /** Show label in the form field. Defaults to true. */
   @Input() showLabel: boolean = true;
 
+  /**
+   * Whether the hint/error row below the control reserves space when empty.
+   * Defaults to 'fixed', matching Angular Material. Pass 'dynamic' where the
+   * selector sits in a row that has to align with something else.
+   */
+  @Input() subscriptSizing: SubscriptSizing = 'fixed';
+
   /** Input server. */
   form: any;
 
@@ -57,7 +64,7 @@ export class ServerSelectorComponent implements OnInit {
   ngOnInit(): void {
     this.servers = this.settingsService.servers;
     this.existMoreThanOneServer = this.servers && this.servers.length > 1;
-    if (!this.existMoreThanOneServer) {
+    if (!this.existMoreThanOneServer && this.servers?.[0]) {
       this.settingsService.setServer(this.servers[0]);
     } else {
       this.existMoreThanOneServer = true;

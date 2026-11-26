@@ -17,9 +17,12 @@ import { Route } from '../core/route/route.service';
 import { ProductsComponent } from './products.component';
 import { LoanProductsComponent } from './loan-products/loan-products.component';
 import { CreateLoanProductComponent } from './loan-products/create-loan-product/create-loan-product.component';
+import { CreateLoanProductClassicComponent } from './loan-products/create-loan-product-classic/create-loan-product-classic.component';
+import { LoanProductSelectionComponent } from './loan-products/create-loan-product/loan-product-selection.component';
 import { ViewLoanProductComponent } from './loan-products/view-loan-product/view-loan-product.component';
 import { EditLoanProductComponent } from './loan-products/edit-loan-product/edit-loan-product.component';
 import { SavingProductsComponent } from './saving-products/saving-products.component';
+import { productEditorGuard } from './saving-products/product-editor/product-editor.guard';
 import { CreateSavingProductComponent } from './saving-products/create-saving-product/create-saving-product.component';
 import { ViewSavingProductComponent } from './saving-products/view-saving-product/view-saving-product.component';
 import { EditSavingProductComponent } from './saving-products/edit-saving-product/edit-saving-product.component';
@@ -33,6 +36,10 @@ import { ViewRecurringDepositProductComponent } from './recurring-deposit-produc
 import { ChargesComponent } from './charges/charges.component';
 import { ViewChargeComponent } from './charges/view-charge/view-charge.component';
 import { CreateChargeComponent } from './charges/create-charge/create-charge.component';
+import { TransferFeesComponent } from './transfer-fees/transfer-fees.component';
+import { CreateTransferFeeComponent } from './transfer-fees/create-transfer-fee/create-transfer-fee.component';
+import { ViewTransferFeeComponent } from './transfer-fees/view-transfer-fee/view-transfer-fee.component';
+import { EditTransferFeeComponent } from './transfer-fees/edit-transfer-fee/edit-transfer-fee.component';
 import { FixedDepositProductsComponent } from './fixed-deposit-products/fixed-deposit-products.component';
 import { CreateFixedDepositProductComponent } from './fixed-deposit-products/create-fixed-deposit-product/create-fixed-deposit-product.component';
 import { ProductsMixComponent } from './products-mix/products-mix.component';
@@ -65,7 +72,6 @@ import { LoanProductsResolver } from './loan-products/loan-products.resolver';
 import { LoanProductsTemplateResolver } from './loan-products/loan-products-template.resolver';
 import { LoanProductResolver } from './loan-products/loan-product.resolver';
 import { LoanProductAndTemplateResolver } from './loan-products/edit-loan-product/loan-product-and-template.resolver';
-import { SavingProductsResolver } from './saving-products/saving-products.resolver';
 import { SavingProductsTemplateResolver } from './saving-products/saving-products-template.resolver';
 import { SavingProductResolver } from './saving-products/saving-product.resolver';
 import { SavingProductAndTemplateResolver } from './saving-products/edit-saving-product/saving-product-and-template.resolver';
@@ -78,6 +84,8 @@ import { RecurringDepositProductResolver } from './recurring-deposit-products/re
 import { ChargesResolver } from './charges/charges.resolver';
 import { ChargeResolver } from './charges/charge.resolver';
 import { ChargesTemplateResolver } from './charges/charges-template.resolver';
+import { TransferFeesResolver } from './transfer-fees/transfer-fees.resolver';
+import { TransferFeeResolver } from './transfer-fees/transfer-fee.resolver';
 import { FixedDepositProductsResolver } from './fixed-deposit-products/fixed-deposit-products.resolver';
 import { FixedDepositProductsTemplateResolver } from './fixed-deposit-products/fixed-deposit-products-template.resolver';
 import { ProductsMixResolver } from './products-mix/products-mix.resolver';
@@ -170,8 +178,139 @@ const routes: Routes = [
             },
             {
               path: 'create',
-              component: CreateLoanProductComponent,
+              component: LoanProductSelectionComponent,
+              data: { title: 'Create Loan Product', breadcrumb: 'Create' }
+            },
+            {
+              path: 'create/classic',
+              component: CreateLoanProductClassicComponent,
               data: { title: 'Create Loan Product', breadcrumb: 'Create' },
+              resolve: {
+                loanProductsTemplate: LoanProductsTemplateResolver,
+                configurations: GlobalConfigurationsResolver
+              }
+            },
+            {
+              path: 'personal-loan',
+              component: CreateLoanProductComponent,
+              data: { title: 'Create Personal Loan', breadcrumb: 'Personal Loan' },
+              resolve: {
+                loanProductsTemplate: LoanProductsTemplateResolver,
+                configurations: GlobalConfigurationsResolver
+              }
+            },
+            {
+              path: 'custom-advanced',
+              component: CreateLoanProductComponent,
+              data: { title: 'Custom / Advanced Loan Configuration', breadcrumb: 'Custom / Advanced' },
+              resolve: {
+                loanProductsTemplate: LoanProductsTemplateResolver,
+                configurations: GlobalConfigurationsResolver
+              }
+            },
+            {
+              path: 'two-wheeler-loan',
+              component: CreateLoanProductComponent,
+              data: { title: 'Create Two Wheeler Loan', breadcrumb: 'Two Wheeler Loan' },
+              resolve: {
+                loanProductsTemplate: LoanProductsTemplateResolver,
+                configurations: GlobalConfigurationsResolver
+              }
+            },
+            {
+              path: 'education-loan',
+              component: CreateLoanProductComponent,
+              data: { title: 'Create Education Loan', breadcrumb: 'Education Loan' },
+              resolve: {
+                loanProductsTemplate: LoanProductsTemplateResolver,
+                configurations: GlobalConfigurationsResolver
+              }
+            },
+            {
+              path: 'agriculture-loan',
+              component: CreateLoanProductComponent,
+              data: { title: 'Create Agriculture Loan', breadcrumb: 'Agriculture Loan' },
+              resolve: {
+                loanProductsTemplate: LoanProductsTemplateResolver,
+                configurations: GlobalConfigurationsResolver
+              }
+            },
+            {
+              path: 'bnpl-loan',
+              component: CreateLoanProductComponent,
+              data: { title: 'Create BNPL Loan', breadcrumb: 'BNPL Loan' },
+              resolve: {
+                loanProductsTemplate: LoanProductsTemplateResolver,
+                configurations: GlobalConfigurationsResolver
+              }
+            },
+            {
+              path: 'home-loan',
+              component: CreateLoanProductComponent,
+              data: { title: 'Create Home Loan', breadcrumb: 'Home Loan' },
+              resolve: {
+                loanProductsTemplate: LoanProductsTemplateResolver,
+                configurations: GlobalConfigurationsResolver
+              }
+            },
+            {
+              path: 'mortgage-loan',
+              component: CreateLoanProductComponent,
+              data: { title: 'Create Mortgage Loan', breadcrumb: 'Mortgage Loan' },
+              resolve: {
+                loanProductsTemplate: LoanProductsTemplateResolver,
+                configurations: GlobalConfigurationsResolver
+              }
+            },
+            {
+              path: 'gold-loan',
+              component: CreateLoanProductComponent,
+              data: { title: 'Create Gold Loan', breadcrumb: 'Gold Loan' },
+              resolve: {
+                loanProductsTemplate: LoanProductsTemplateResolver,
+                configurations: GlobalConfigurationsResolver
+              }
+            },
+            {
+              path: 'auto-loan',
+              component: CreateLoanProductComponent,
+              data: { title: 'Create Auto Loan', breadcrumb: 'Auto Loan' },
+              resolve: {
+                loanProductsTemplate: LoanProductsTemplateResolver,
+                configurations: GlobalConfigurationsResolver
+              }
+            },
+            {
+              path: 'jlg-loan',
+              component: CreateLoanProductComponent,
+              data: { title: 'Create JLG Loan', breadcrumb: 'JLG Loan' },
+              resolve: {
+                loanProductsTemplate: LoanProductsTemplateResolver,
+                configurations: GlobalConfigurationsResolver
+              }
+            },
+            {
+              path: 'consumer-durable-loan',
+              component: CreateLoanProductComponent,
+              data: { title: 'Create Consumer Durable Loan', breadcrumb: 'Consumer Durable Loan' },
+              resolve: {
+                loanProductsTemplate: LoanProductsTemplateResolver,
+                configurations: GlobalConfigurationsResolver
+              }
+            },
+            {
+              path: 'credit-card-emi-loan',
+              component: CreateLoanProductComponent,
+              data: { title: 'Create Credit Card EMI Loan', breadcrumb: 'Credit Card EMI' },
+              resolve: {
+                loanProductsTemplate: LoanProductsTemplateResolver,
+                configurations: GlobalConfigurationsResolver
+              }
+            },
+            {
+              path: 'loan-against-securities',
+              component: CreateLoanProductComponent,
+              data: { title: 'Create Loan vs Securities / FD', breadcrumb: 'Loan vs Securities / FD' },
               resolve: {
                 loanProductsTemplate: LoanProductsTemplateResolver,
                 configurations: GlobalConfigurationsResolver
@@ -183,6 +322,7 @@ const routes: Routes = [
               resolve: {
                 loanProductDatatables: LoanProductDatatablesResolver
               },
+              runGuardsAndResolvers: 'pathParamsOrQueryParamsChange',
               data: { title: 'View Loan Product', breadcrumb: 'productId', routeParamBreadcrumb: 'productId' },
               children: [
                 {
@@ -194,6 +334,7 @@ const routes: Routes = [
                   path: 'general',
                   data: { title: 'General', breadcrumb: 'General', routeParamBreadcrumb: false },
                   component: GeneralTabComponent,
+                  runGuardsAndResolvers: 'pathParamsOrQueryParamsChange',
                   resolve: {
                     loanProduct: LoanProductResolver
                   }
@@ -205,6 +346,7 @@ const routes: Routes = [
                       path: ':datatableName',
                       component: DatatableTabComponent,
                       data: { title: 'Data Table View', routeParamBreadcrumb: 'datatableName' },
+                      runGuardsAndResolvers: 'pathParamsOrQueryParamsChange',
                       resolve: {
                         loanProductDatatable: LoanProductDatatableResolver
                       }
@@ -215,6 +357,22 @@ const routes: Routes = [
                   path: 'edit',
                   component: EditLoanProductComponent,
                   data: { title: 'Edit Loan Product', breadcrumb: 'Edit', routeParamBreadcrumb: false },
+                  runGuardsAndResolvers: 'pathParamsOrQueryParamsChange',
+                  resolve: {
+                    loanProductAndTemplate: LoanProductAndTemplateResolver,
+                    configurations: GlobalConfigurationsResolver
+                  }
+                },
+                {
+                  path: 'clone',
+                  component: EditLoanProductComponent,
+                  data: {
+                    title: 'Clone Loan Product',
+                    breadcrumb: 'Clone',
+                    routeParamBreadcrumb: false,
+                    mode: 'clone'
+                  },
+                  runGuardsAndResolvers: 'pathParamsOrQueryParamsChange',
                   resolve: {
                     loanProductAndTemplate: LoanProductAndTemplateResolver,
                     configurations: GlobalConfigurationsResolver
@@ -230,14 +388,13 @@ const routes: Routes = [
           children: [
             {
               path: '',
-              component: SavingProductsComponent,
-              resolve: {
-                savingProducts: SavingProductsResolver
-              }
+              component: SavingProductsComponent
             },
             {
               path: 'create',
               component: CreateSavingProductComponent,
+              canDeactivate: [productEditorGuard],
+              runGuardsAndResolvers: 'paramsOrQueryParamsChange',
               data: { title: 'Create Savings Product', breadcrumb: 'Create' },
               resolve: {
                 savingProductsTemplate: SavingProductsTemplateResolver
@@ -285,6 +442,8 @@ const routes: Routes = [
                 {
                   path: 'edit',
                   component: EditSavingProductComponent,
+                  canDeactivate: [productEditorGuard],
+                  runGuardsAndResolvers: 'paramsOrQueryParamsChange',
                   data: { title: 'Edit Saving Product', breadcrumb: 'Edit', routeParamBreadcrumb: false },
                   resolve: {
                     savingProductAndTemplate: SavingProductAndTemplateResolver
@@ -394,6 +553,45 @@ const routes: Routes = [
           ]
         },
         {
+          path: 'transfer-fees',
+          data: { title: 'Transfer Fees', breadcrumb: 'Transfer Fees' },
+          children: [
+            {
+              path: '',
+              component: TransferFeesComponent,
+              resolve: {
+                transferFees: TransferFeesResolver
+              }
+            },
+            {
+              path: 'create',
+              component: CreateTransferFeeComponent,
+              data: { title: 'Create Transfer Fee', breadcrumb: 'Create' }
+            },
+            {
+              path: ':id',
+              data: { title: 'View Transfer Fee', routeParamBreadcrumb: 'id' },
+              children: [
+                {
+                  path: '',
+                  component: ViewTransferFeeComponent,
+                  resolve: {
+                    transferFee: TransferFeeResolver
+                  }
+                },
+                {
+                  path: 'edit',
+                  component: EditTransferFeeComponent,
+                  data: { title: 'Edit Transfer Fee', breadcrumb: 'Edit', routeParamBreadcrumb: false },
+                  resolve: {
+                    transferFee: TransferFeeResolver
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
           path: 'tax-configurations',
           data: { title: 'Manage Tax Configurations', breadcrumb: 'Manage Tax Configurations' },
           children: [
@@ -429,18 +627,12 @@ const routes: Routes = [
                   children: [
                     {
                       path: '',
-                      component: ViewTaxComponentComponent,
-                      resolve: {
-                        taxComponent: TaxComponentResolver
-                      }
+                      component: ViewTaxComponentComponent
                     },
                     {
                       path: 'edit',
                       data: { title: 'Edit Tax Component', breadcrumb: 'Edit', routeParamBreadcrumb: false },
-                      component: EditTaxComponentComponent,
-                      resolve: {
-                        taxComponent: TaxComponentResolver
-                      }
+                      component: EditTaxComponentComponent
                     }
                   ]
                 }
@@ -474,10 +666,7 @@ const routes: Routes = [
                   children: [
                     {
                       path: '',
-                      component: ViewTaxGroupComponent,
-                      resolve: {
-                        taxGroup: TaxGroupResolver
-                      }
+                      component: ViewTaxGroupComponent
                     },
                     {
                       path: 'edit',
@@ -529,18 +718,12 @@ const routes: Routes = [
                   children: [
                     {
                       path: '',
-                      component: ViewRangeComponent,
-                      resolve: {
-                        delinquencyRange: DelinquencyRangeComponentsResolver
-                      }
+                      component: ViewRangeComponent
                     },
                     {
                       path: 'edit',
                       data: { title: 'Edit Delinquency Range', breadcrumb: 'Edit', routeParamBreadcrumb: false },
-                      component: EditRangeComponent,
-                      resolve: {
-                        delinquencyRange: DelinquencyRangeComponentsResolver
-                      }
+                      component: EditRangeComponent
                     }
                   ]
                 }
@@ -574,17 +757,13 @@ const routes: Routes = [
                   children: [
                     {
                       path: '',
-                      component: ViewBucketComponent,
-                      resolve: {
-                        delinquencyBucket: DelinquencyBucketComponentsResolver
-                      }
+                      component: ViewBucketComponent
                     },
                     {
                       path: 'edit',
                       data: { title: 'Edit Delinquency Bucket', breadcrumb: 'Edit', routeParamBreadcrumb: false },
                       component: EditBucketComponent,
                       resolve: {
-                        delinquencyBucket: DelinquencyBucketComponentsResolver,
                         delinquencyBucketsTemplateData: DelinquencyRangeComponentsResolver
                       }
                     }
@@ -661,6 +840,12 @@ const routes: Routes = [
               ]
             }
           ]
+        },
+        {
+          path: 'investment-products',
+          loadChildren: () =>
+            import('./investment-products/investment-products.routes').then((m) => m.INVESTMENT_PRODUCT_ROUTES),
+          data: { title: 'Investment.title', breadcrumb: 'Investment.title' }
         },
         {
           path: 'fixed-deposit-products',
@@ -754,18 +939,12 @@ const routes: Routes = [
               children: [
                 {
                   path: '',
-                  component: ViewProductMixComponent,
-                  resolve: {
-                    productMix: ViewProductMixResolver
-                  }
+                  component: ViewProductMixComponent
                 },
                 {
                   path: 'edit',
                   data: { title: 'Edit Product Mix', breadcrumb: 'Edit', routeParamBreadcrumb: false },
-                  component: EditProductMixComponent,
-                  resolve: {
-                    productMix: ViewProductMixResolver
-                  }
+                  component: EditProductMixComponent
                 }
               ]
             }
@@ -796,18 +975,12 @@ const routes: Routes = [
               children: [
                 {
                   path: '',
-                  component: ViewFloatingRateComponent,
-                  resolve: {
-                    floatingRate: FloatingRateResolver
-                  }
+                  component: ViewFloatingRateComponent
                 },
                 {
                   path: 'edit',
                   component: EditFloatingRateComponent,
-                  data: { title: 'Edit Floating Rate', breadcrumb: 'Edit', routeParamBreadcrumb: false },
-                  resolve: {
-                    floatingRate: FloatingRateResolver
-                  }
+                  data: { title: 'Edit Floating Rate', breadcrumb: 'Edit', routeParamBreadcrumb: false }
                 }
               ]
             }
@@ -841,10 +1014,7 @@ const routes: Routes = [
               children: [
                 {
                   path: '',
-                  component: ViewChargeComponent,
-                  resolve: {
-                    charge: ChargeResolver
-                  }
+                  component: ViewChargeComponent
                 },
                 {
                   path: 'edit',
@@ -886,18 +1056,14 @@ const routes: Routes = [
               children: [
                 {
                   path: '',
-                  component: ViewCollateralComponent,
-                  resolve: {
-                    collateral: CollateralResolver
-                  }
+                  component: ViewCollateralComponent
                 },
                 {
                   path: 'edit',
                   component: EditCollateralComponent,
                   data: { title: 'Edit Collateral', breadcrumb: 'Edit', routeParamBreadcrumb: false },
                   resolve: {
-                    collateralTemplate: CollateralTemplateResolver,
-                    collateral: CollateralResolver
+                    collateralTemplate: CollateralTemplateResolver
                   }
                 }
               ]
@@ -1008,7 +1174,6 @@ const routes: Routes = [
     LoanProductsTemplateResolver,
     LoanProductResolver,
     LoanProductAndTemplateResolver,
-    SavingProductsResolver,
     SavingProductsTemplateResolver,
     SavingProductResolver,
     SavingProductAndTemplateResolver,
@@ -1022,6 +1187,8 @@ const routes: Routes = [
     ChargeResolver,
     ChargesTemplateAndResolver,
     ChargesTemplateResolver,
+    TransferFeesResolver,
+    TransferFeeResolver,
     FixedDepositProductsResolver,
     FixedDepositProductsTemplateResolver,
     ProductsMixResolver,

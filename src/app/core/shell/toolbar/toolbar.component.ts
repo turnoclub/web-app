@@ -53,6 +53,7 @@ import { NotificationsTrayComponent as NotificationsTrayComponent_1 } from '../.
 import { ThemeToggleComponent } from '../../../shared/theme-toggle/theme-toggle.component';
 import { STANDALONE_SHARED_IMPORTS } from 'app/standalone-shared.module';
 import { DocumentationLinksService } from 'app/shared/services/documentation-links.service';
+import { LogoutDialogComponent } from 'app/shared/logout-dialog/logout-dialog.component';
 
 /**
  * Toolbar component.
@@ -93,6 +94,38 @@ export class ToolbarComponent implements OnInit, AfterViewInit, AfterContentChec
   @ViewChild('institution') institution: ElementRef<any>;
   /* Template for popover on institution */
   @ViewChild('templateInstitution') templateInstitution: TemplateRef<any>;
+  /* Reference of accounting */
+  @ViewChild('accounting', { read: ElementRef }) accounting: ElementRef<any>;
+  /* Template for popover on accounting */
+  @ViewChild('templateAccounting') templateAccounting: TemplateRef<any>;
+  /* Reference of reports */
+  @ViewChild('reports', { read: ElementRef }) reports: ElementRef<any>;
+  /* Template for popover on reports */
+  @ViewChild('templateReports') templateReports: TemplateRef<any>;
+  /* Reference of admin */
+  @ViewChild('admin', { read: ElementRef }) admin: ElementRef<any>;
+  /* Template for popover on admin */
+  @ViewChild('templateAdmin') templateAdmin: TemplateRef<any>;
+  /* Reference of configWizard */
+  @ViewChild('configWizard', { read: ElementRef }) configWizard: ElementRef<any>;
+  /* Template for popover on configWizard */
+  @ViewChild('templateConfigWizard') templateConfigWizard: TemplateRef<any>;
+  /* Reference of globalSearch */
+  @ViewChild('globalSearch') globalSearch: ElementRef<any>;
+  /* Template for popover on globalSearch */
+  @ViewChild('templateGlobalSearch') templateGlobalSearch: TemplateRef<any>;
+  /* Reference of languageSelector */
+  @ViewChild('languageSelector') languageSelector: ElementRef<any>;
+  /* Template for popover on languageSelector */
+  @ViewChild('templateLanguageSelector') templateLanguageSelector: TemplateRef<any>;
+  /* Reference of notifications */
+  @ViewChild('notifications') notifications: ElementRef<any>;
+  /* Template for popover on notifications */
+  @ViewChild('templateNotifications') templateNotifications: TemplateRef<any>;
+  /* Reference of themeToggle */
+  @ViewChild('themeToggle') themeToggle: ElementRef<any>;
+  /* Template for popover on themeToggle */
+  @ViewChild('templateThemePicker') templateThemePicker: TemplateRef<any>;
   /* Reference of appMenu */
   @ViewChild('appMenu') appMenu: ElementRef<any>;
   /* Template for popover on appMenu */
@@ -143,6 +176,27 @@ export class ToolbarComponent implements OnInit, AfterViewInit, AfterContentChec
   }
 
   /**
+   * Makes a dropdown at least as wide as the tab that opened it, so that the two line up as one shape.
+   * @param menu Dropdown that was opened.
+   * @param tab Toolbar tab that opened it.
+   */
+  matchMenuToTab(menu: MatMenu, tab: HTMLElement) {
+    const panel = document.getElementById(menu.panelId);
+    if (panel) {
+      panel.style.minWidth = `${tab.getBoundingClientRect().width}px`;
+    }
+  }
+
+  /**
+   * Marks a dropdown that opened beside another menu instead of under the toolbar,
+   * so that it is drawn as a free-standing panel.
+   * @param menu Dropdown that was opened as a submenu.
+   */
+  markAsSubmenu(menu: MatMenu) {
+    document.getElementById(menu.panelId)?.classList.add('mifosx-toolbar-submenu');
+  }
+
+  /**
    * Logs out the authenticated user and redirects to login page.
    * Uses unified AuthenticationService which handles both OAuth2 and OIDC logout.
    */
@@ -155,6 +209,23 @@ export class ToolbarComponent implements OnInit, AfterViewInit, AfterContentChec
         finalize(() => this.router.navigate(['/login'], { replaceUrl: true }))
       )
       .subscribe();
+  }
+
+  /**
+   * Opens the logout confirmation dialog and only runs the existing logout flow
+   * once the operator confirms. Cancelling or dismissing the dialog preserves
+   * the authenticated session.
+   */
+  confirmLogout() {
+    this.dialog
+      .open(LogoutDialogComponent)
+      .afterClosed()
+      .pipe(take(1))
+      .subscribe((confirmed: boolean) => {
+        if (confirmed) {
+          this.logout();
+        }
+      });
   }
 
   /**
@@ -175,6 +246,69 @@ export class ToolbarComponent implements OnInit, AfterViewInit, AfterContentChec
       return;
     }
     setTimeout(() => this.popoverService.open(template, target, 'bottom', true, {}), 200);
+  }
+
+  /**
+   * Steps of the toolbar tour, in order. A step's target is undefined when
+   * its element isn't rendered, e.g. a menu hidden by mifosxHasPermission.
+   */
+  private get toolbarTourSteps(): { name: string; template: TemplateRef<any>; target: ElementRef<any> | undefined }[] {
+    return [
+      { name: 'institution', template: this.templateInstitution, target: this.institution },
+      { name: 'accounting', template: this.templateAccounting, target: this.accounting },
+      { name: 'reports', template: this.templateReports, target: this.reports },
+      { name: 'admin', template: this.templateAdmin, target: this.admin },
+      { name: 'configWizard', template: this.templateConfigWizard, target: this.configWizard },
+      { name: 'globalSearch', template: this.templateGlobalSearch, target: this.globalSearch },
+      { name: 'languageSelector', template: this.templateLanguageSelector, target: this.languageSelector },
+      { name: 'notifications', template: this.templateNotifications, target: this.notifications },
+      { name: 'themePicker', template: this.templateThemePicker, target: this.themeToggle },
+      { name: 'appMenu', template: this.templateAppMenu, target: this.appMenu }
+    ];
+  }
+
+  /**
+   * Shows the first toolbar tour step that is rendered for the current user.
+   */
+  showFirstTourStep(): void {
+    const first = this.toolbarTourSteps.find((step) => step.target);
+    if (first) {
+      this.showPopover(first.template, first.target);
+    } else {
+      this.nextStep();
+    }
+  }
+
+  /**
+   * Shows the next rendered toolbar tour step after the current one,
+   * or moves on to the sidenav tour if there is none.
+   * @param current Name of the current step.
+   */
+  showNextTourStep(current: string): void {
+    const steps = this.toolbarTourSteps;
+    const currentIndex = steps.findIndex((step) => step.name === current);
+    const next = steps.slice(currentIndex + 1).find((step) => step.target);
+    if (next) {
+      this.showPopover(next.template, next.target);
+    } else {
+      this.nextStep();
+    }
+  }
+
+  /**
+   * Shows the previous rendered toolbar tour step before the current one,
+   * or the current step again if there is none.
+   * @param current Name of the current step.
+   */
+  showPreviousTourStep(current: string): void {
+    const steps = this.toolbarTourSteps;
+    const currentIndex = steps.findIndex((step) => step.name === current);
+    const previous = steps
+      .slice(0, currentIndex)
+      .reverse()
+      .find((step) => step.target);
+    const step = previous ?? steps[currentIndex];
+    this.showPopover(step.template, step.target);
   }
 
   /**
@@ -241,7 +375,7 @@ export class ToolbarComponent implements OnInit, AfterViewInit, AfterContentChec
   ngAfterViewInit() {
     if (this.configurationWizardService.showToolbar) {
       setTimeout(() => {
-        this.showPopover(this.templateInstitution, this.institution.nativeElement);
+        this.showFirstTourStep();
       });
     }
 

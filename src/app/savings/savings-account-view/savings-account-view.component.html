@@ -15,6 +15,7 @@
             mat-card-md-image
             class="profile-image"
             matTooltip="{{ 'tooltips.Savings Account' | translate }}"
+            [alt]="'tooltips.Savings Account' | translate"
             [src]="'assets/images/savings_account_placeholder.png'"
           />
         </div>
@@ -39,6 +40,15 @@
                 ></i>
               }
             </h3>
+            <p>
+              {{ 'FinancialControls.NativeAccountStatus' | translate }}:
+              {{ savingsAccountData.status?.value || ('SavingsEditor.Unavailable' | translate) }}
+            </p>
+            <p>
+              {{ 'FinancialControls.NativeRestrictions' | translate }}:
+              {{ savingsAccountData.subStatus?.value || ('SavingsEditor.Unavailable' | translate) }}
+            </p>
+            <p>{{ 'FinancialControls.AccountRestrictionNotice' | translate }}</p>
             <!-- Product Name Row -->
             <span class="product-row">
               <span class="m-r-5">{{ 'labels.inputs.Savings Product' | translate }} :</span>
@@ -156,6 +166,31 @@
         </a>
         <a
           mat-tab-link
+          [routerLink]="['./dashboard']"
+          routerLinkActive
+          #dashboard="routerLinkActive"
+          [active]="dashboard.isActive"
+        >
+          {{ 'labels.inputs.Dashboard' | translate }}
+        </a>
+        @if (savingsAccountData.clientId) {
+          <ng-container *mifosxHasPermission="'READ_CLIENT'">
+            <ng-container *mifosxHasPermission="'READ_SAVINGSACCOUNT'">
+              <a
+                mat-tab-link
+                *mifosxHasPermission="'READ_ENROLLMENT_STATUS'"
+                [routerLink]="['./acquisition-status']"
+                routerLinkActive
+                #acquisitionStatus="routerLinkActive"
+                [active]="acquisitionStatus.isActive"
+              >
+                {{ 'acquisition.title' | translate }}
+              </a>
+            </ng-container>
+          </ng-container>
+        }
+        <a
+          mat-tab-link
           [routerLink]="['./transactions']"
           routerLinkActive
           #transactions="routerLinkActive"
@@ -213,7 +248,7 @@
             #datatable="routerLinkActive"
             [active]="datatable.isActive"
           >
-            {{ savingsDatatable.registeredTableName }}
+            {{ savingsDatatable.registeredTableName | datatableDisplayLabel }}
           </a>
         }
       </nav>

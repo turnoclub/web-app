@@ -9,12 +9,19 @@
 <div class="content responsive-column">
   <h3 class="mat-h3 flex-fill">{{ 'labels.heading.Details' | translate }}</h3>
 
-  <div class="flex-fill">
-    <span class="flex-30">{{ 'labels.inputs.Client' | translate }}:</span>
-    <span class="flex-70">
-      {{ loansAccountProductTemplate.clientName || loansAccountProductTemplate.client.displayName }}
-    </span>
-  </div>
+  @if (loansAccountProductTemplate.clientName || loansAccountProductTemplate.client) {
+    <div class="flex-fill" data-testid="client-row">
+      <span class="flex-30">{{ 'labels.inputs.Client' | translate }}:</span>
+      <span class="flex-70">
+        {{ loansAccountProductTemplate.clientName || loansAccountProductTemplate.client.displayName }}
+      </span>
+    </div>
+  } @else if (loansAccountProductTemplate.group) {
+    <div class="flex-fill" data-testid="group-row">
+      <span class="flex-30">{{ 'labels.inputs.Group' | translate }}:</span>
+      <span class="flex-70">{{ loansAccountProductTemplate.group.name }}</span>
+    </div>
+  }
 
   <div class="flex-fill">
     <span class="flex-30">{{ 'labels.inputs.Product Type' | translate }}:</span>
@@ -41,7 +48,7 @@
 
   @if (loanProductService.isLoanProduct && loansAccount.loanPurposeId) {
     <div class="flex-fill">
-      <span class="flex-30">{{ 'labels.inputs.Loan purpose' | translate }}:</span>
+      <span class="flex-30">{{ 'labels.heading.Loan Purpose' | translate }}:</span>
       <span class="flex-70">{{
         loansAccount.loanPurposeId | find: loansAccountProductTemplate.loanPurposeOptions : 'id' : 'name'
       }}</span>
@@ -74,6 +81,15 @@
     </div>
   }
 
+  @if (loansAccount.originators?.length) {
+    <div class="flex-fill">
+      <span class="flex-30">{{ 'labels.inputs.Loan Originator' | translate }}:</span>
+      <span class="flex-70">
+        {{ originatorsLabel(loansAccount.originators) }}
+      </span>
+    </div>
+  }
+
   @if (loanProductService.isWorkingCapital) {
     <h3 class="mat-h3 margin-t flex-fill">{{ 'labels.heading.Terms' | translate }}</h3>
 
@@ -88,17 +104,40 @@
       </span>
     </div>
     <div class="flex-fill">
-      <span class="flex-30"
-        >{{ 'labels.inputs.Total Payment' | translate }} {{ 'labels.inputs.Volume' | translate }}:</span
-      >
-      <span class="flex-70">
-        {{
-          loansAccount.totalPaymentVolume
-            | currency: loansAccountProductTemplate.currency.code : 'symbol-narrow' : '1.2-2'
-        }}
-        <span class="m-l-5">{{ loansAccountProductTemplate.currency.code }}</span>
-      </span>
+      <span class="flex-30">{{ 'labels.inputs.Payment Amount Calculation Strategy' | translate }}:</span>
+      <span class="flex-70">{{ paymentAmountCalculationStrategyOption?.value | translateKey: 'catalogs' }}</span>
     </div>
+    @if (paymentAmountCalculationStrategy === wcStrategy.TPV) {
+      <div class="flex-fill">
+        <span class="flex-30"
+          >{{ 'labels.inputs.Total Payment' | translate }} {{ 'labels.inputs.Volume' | translate }}:</span
+        >
+        <span class="flex-70">
+          {{
+            loansAccount.totalPaymentVolume
+              | currency: loansAccountProductTemplate.currency.code : 'symbol-narrow' : '1.2-2'
+          }}
+          <span class="m-l-5">{{ loansAccountProductTemplate.currency.code }}</span>
+        </span>
+      </div>
+    }
+    @if (paymentAmountCalculationStrategy === wcStrategy.ANNUAL_EIR) {
+      <div class="flex-fill">
+        <span class="flex-30">{{ 'labels.inputs.Annual EIR' | translate }}:</span>
+        <span class="flex-70">{{ loansAccount.annualEir | number: '1.0-6' }} %</span>
+      </div>
+    }
+    @if (paymentAmountCalculationStrategy === wcStrategy.PAYMENT_AMOUNT) {
+      <div class="flex-fill">
+        <span class="flex-30">{{ 'labels.inputs.Payment Amount' | translate }}:</span>
+        <span class="flex-70">
+          {{
+            loansAccount.paymentAmount | currency: loansAccountProductTemplate.currency.code : 'symbol-narrow' : '1.2-2'
+          }}
+          <span class="m-l-5">{{ loansAccountProductTemplate.currency.code }}</span>
+        </span>
+      </div>
+    }
 
     @if (loansAccount.discount) {
       <div class="flex-fill">
@@ -110,18 +149,23 @@
       </div>
     }
 
-    @if (loansAccount.delinquencyGraceDays) {
+    @if (loansAccount.delinquencyBucketId) {
       <div class="flex-fill">
-        <span class="flex-30">{{ 'labels.inputs.Delinquency Grace Days' | translate }}:</span>
-        <span class="flex-70"> {{ loansAccount.delinquencyGraceDays | formatNumber }}</span>
+        <span class="flex-30">{{ 'labels.inputs.Delinquency Bucket' | translate }}:</span>
+        <span class="flex-60">{{ getDelinquencyBucket(loansAccount.delinquencyBucketId)?.name }}</span>
       </div>
-    }
-
-    @if (loansAccount.delinquencyStartType) {
-      <div class="flex-fill">
-        <span class="flex-30">{{ 'labels.inputs.Delinquency Start Type' | translate }}:</span>
-        <span class="flex-60">{{ camalize(loansAccount.delinquencyStartType) | translateKey: 'catalogs' }}</span>
-      </div>
+      @if (loansAccount.delinquencyGraceDays || loansAccount.delinquencyGraceDays === 0) {
+        <div class="flex-fill">
+          <span class="flex-30">{{ 'labels.inputs.Delinquency Grace Days' | translate }}:</span>
+          <span class="flex-70"> {{ loansAccount.delinquencyGraceDays | formatNumber: '' : 0 }}</span>
+        </div>
+      }
+      @if (loansAccount.delinquencyStartType) {
+        <div class="flex-fill">
+          <span class="flex-30">{{ 'labels.inputs.Delinquency Start Type' | translate }}:</span>
+          <span class="flex-60">{{ camalize(delinquencyStartTypeOption?.value) | translateKey: 'catalogs' }}</span>
+        </div>
+      }
     }
 
     @if (loansAccount.breachId) {
@@ -131,6 +175,12 @@
           ><mifosx-breach-display [singleRow]="false" [breach]="getBreach(loansAccount.breachId)"
         /></span>
       </div>
+      @if (loansAccount.breachStartType) {
+        <div class="flex-fill">
+          <span class="flex-30">{{ 'labels.inputs.Breach Start Type' | translate }}:</span>
+          <span class="flex-60">{{ breachStartTypeOption?.value | translateKey: 'catalogs' }}</span>
+        </div>
+      }
     }
 
     @if (loansAccount.nearBreachId) {
@@ -142,16 +192,18 @@
       </div>
     }
 
-    <div class="flex-fill">
-      <span class="flex-30">{{ 'labels.inputs.Period Payment Rate' | translate }}:</span>
-      <span class="flex-70"> {{ loansAccount.periodPaymentRate | formatNumber }} % </span>
-    </div>
+    @if (paymentAmountCalculationStrategy === wcStrategy.TPV) {
+      <div class="flex-fill">
+        <span class="flex-30">{{ 'labels.inputs.Period Payment Rate' | translate }}:</span>
+        <span class="flex-70"> {{ loansAccount.periodPaymentRate | formatNumber }} % </span>
+      </div>
+    }
 
     <div class="flex-fill">
       <span class="flex-30">{{ 'labels.inputs.Period Payment Frequency' | translate }}:</span>
       <span class="flex-60"
         >{{ loansAccount.repaymentEvery }}
-        {{ camalize(loansAccount.repaymentFrequencyType) | translateKey: 'catalogs' }}</span
+        {{ camalize(repaymentFrequencyTypeOption?.value) | translateKey: 'catalogs' }}</span
       >
     </div>
   }
@@ -238,6 +290,17 @@
       >
     </div>
 
+    @if (isSemiMonthly(loansAccount.repaymentFrequencyType)) {
+      <div class="flex-fill">
+        <span class="flex-30">{{ 'labels.inputs.First repayment day of month' | translate }}:</span>
+        <span class="flex-60">{{ loansAccount.firstRepaymentDayOfMonth }}</span>
+      </div>
+      <div class="flex-fill">
+        <span class="flex-30">{{ 'labels.inputs.Second repayment day of month' | translate }}:</span>
+        <span class="flex-60">{{ loansAccount.secondRepaymentDayOfMonth | semiMonthlyDay }}</span>
+      </div>
+    }
+
     @if (productEnableDownPayment) {
       <div class="flex-fill">
         <span class="flex-30">{{ 'labels.inputs.Enable Down Payments' | translate }}:</span>
@@ -264,7 +327,7 @@
         <span class="flex-30">{{ 'labels.inputs.Nominal interest rate' | translate }}:</span>
         <span class="flex-60"
           >{{ loansAccount.interestRatePerPeriod }}&nbsp;&nbsp;{{
-            loansAccountProductTemplate.interestRateFrequencyType.value
+            loansAccountProductTemplate.interestRateFrequencyType.value | translateKey: 'catalogs'
           }}</span
         >
       </div>
@@ -396,7 +459,7 @@
       <div class="layout-row-wrap responsive-column flex-fill margin-t">
         <h3 class="mat-h3 flex-fill">{{ 'labels.heading.Charges' | translate }}</h3>
         <mat-divider class="flex-fill"></mat-divider>
-        <table class="flex-fill mat-elevation-z1" mat-table [dataSource]="loansAccount.charges">
+        <table class="mat-elevation-z1" mat-table [dataSource]="loansAccount.charges">
           <ng-container matColumnDef="name">
             <th mat-header-cell *matHeaderCellDef>{{ 'labels.inputs.name' | translate }}</th>
             <td mat-cell *matCellDef="let charge">
@@ -406,7 +469,7 @@
           <ng-container matColumnDef="chargeCalculationType">
             <th mat-header-cell *matHeaderCellDef>{{ 'labels.inputs.Type' | translate }}</th>
             <td mat-cell *matCellDef="let charge">
-              {{ charge.chargeCalculationType.value }}
+              {{ charge.chargeCalculationType.value | translateKey: 'catalogs' }}
             </td>
           </ng-container>
           <ng-container matColumnDef="amount">
@@ -418,7 +481,7 @@
           <ng-container matColumnDef="chargeTimeType">
             <th mat-header-cell *matHeaderCellDef>{{ 'labels.inputs.Collected On' | translate }}</th>
             <td mat-cell *matCellDef="let charge">
-              {{ charge.chargeTimeType.value }}
+              {{ charge.chargeTimeType.value | translateKey: 'catalogs' }}
             </td>
           </ng-container>
           <ng-container matColumnDef="date">
@@ -467,7 +530,9 @@
           </ng-container>
           <ng-container matColumnDef="type">
             <th mat-header-cell *matHeaderCellDef>{{ 'labels.inputs.Type' | translate }}</th>
-            <td mat-cell *matCellDef="let charge">{{ charge.chargeCalculationType.value }}</td>
+            <td mat-cell *matCellDef="let charge">
+              {{ charge.chargeCalculationType.value | translateKey: 'catalogs' }}
+            </td>
           </ng-container>
           <ng-container matColumnDef="amount">
             <th mat-header-cell *matHeaderCellDef>{{ 'labels.inputs.Amount' | translate }}</th>
@@ -475,7 +540,7 @@
           </ng-container>
           <ng-container matColumnDef="collectedon">
             <th mat-header-cell *matHeaderCellDef>{{ 'labels.inputs.Collected On' | translate }}</th>
-            <td mat-cell *matCellDef="let charge">{{ charge.chargeTimeType.value }}</td>
+            <td mat-cell *matCellDef="let charge">{{ charge.chargeTimeType.value | translateKey: 'catalogs' }}</td>
           </ng-container>
           <tr mat-header-row *matHeaderRowDef="overdueChargesDisplayedColumns"></tr>
           <tr mat-row *matRowDef="let row; columns: overdueChargesDisplayedColumns"></tr>
@@ -490,14 +555,10 @@
     <fa-icon icon="arrow-left" class="m-r-10"></fa-icon>
     {{ 'labels.buttons.Previous' | translate }}
   </button>
-  <button
-    mat-raised-button
-    [routerLink]="['../..']"
-    [queryParams]="{ productType: loanProductService.productType.value }"
-  >
+  <button mat-raised-button [routerLink]="['..']" [queryParams]="{ productType: loanProductService.productType.value }">
     {{ 'labels.buttons.Cancel' | translate }}
   </button>
-  <button mat-raised-button color="primary" (click)="submitEvent.emit()">
+  <button mat-raised-button color="primary" [disabled]="submitting" (click)="submitEvent.emit()">
     {{ 'labels.buttons.Submit' | translate }}
   </button>
 </div>

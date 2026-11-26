@@ -6,6 +6,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
+import { CheckerInboxCountService } from 'app/tasks/checker-inbox-count.service';
+import { environment } from 'environments/environment';
 /** Angular Imports */
 import {
   ChangeDetectionStrategy,
@@ -18,6 +20,7 @@ import {
   AfterViewInit,
   inject
 } from '@angular/core';
+import { MatBadge } from '@angular/material/badge';
 import { MatDialog } from '@angular/material/dialog';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 
@@ -43,6 +46,7 @@ import { MatIcon } from '@angular/material/icon';
 import { MatLine } from '@angular/material/grid-list';
 import { STANDALONE_SHARED_IMPORTS } from 'app/standalone-shared.module';
 import { remittanceConfig } from '../../../remittances/remittance.config';
+import { LogoutDialogComponent } from 'app/shared/logout-dialog/logout-dialog.component';
 
 import { catchError, finalize, of, take } from 'rxjs';
 
@@ -63,12 +67,15 @@ import { catchError, finalize, of, take } from 'rxjs';
     MatNavList,
     MatListItem,
     RouterLinkActive,
+    MatBadge,
     MatIcon,
     MatLine
   ],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class SidenavComponent implements OnInit, AfterViewInit {
+  checkerCount = inject(CheckerInboxCountService);
+  readonly cbIldEnabled = environment.cbIldEnabled;
   private router = inject(Router);
   dialog = inject(MatDialog);
   private authenticationService = inject(AuthenticationService);
@@ -96,8 +103,32 @@ export class SidenavComponent implements OnInit, AfterViewInit {
   @ViewChild('logo') logo: ElementRef<any>;
   /* Template for popover on logo */
   @ViewChild('templateLogo') templateLogo: TemplateRef<any>;
+  /* Reference of user panel */
+  @ViewChild('userPanel') userPanel: ElementRef<any>;
+  /* Template for popover on user panel */
+  @ViewChild('templateUserPanel') templateUserPanel: TemplateRef<any>;
+  /* Reference of frequently accessed */
+  @ViewChild('frequentlyAccessed') frequentlyAccessed: ElementRef<any>;
+  /* Template for popover on frequently accessed */
+  @ViewChild('templateFrequentlyAccessed') templateFrequentlyAccessed: TemplateRef<any>;
+  /* Reference of dashboard */
+  @ViewChild('dashboard', { read: ElementRef }) dashboard: ElementRef<any>;
+  /* Template for popover on dashboard */
+  @ViewChild('templateDashboard') templateDashboard: TemplateRef<any>;
+  /* Reference of navigation */
+  @ViewChild('navigation', { read: ElementRef }) navigation: ElementRef<any>;
+  /* Template for popover on navigation */
+  @ViewChild('templateNavigation') templateNavigation: TemplateRef<any>;
+  /* Reference of frequent postings */
+  @ViewChild('frequentPostings', { read: ElementRef }) frequentPostings: ElementRef<any>;
+  /* Template for popover on frequent postings */
+  @ViewChild('templateFrequentPostings') templateFrequentPostings: TemplateRef<any>;
+  /* Reference of create journal entry */
+  @ViewChild('createJournalEntry', { read: ElementRef }) createJournalEntry: ElementRef<any>;
+  /* Template for popover on create journal entry */
+  @ViewChild('templateCreateJournalEntry') templateCreateJournalEntry: TemplateRef<any>;
   /* Refernce of chart of accounts */
-  @ViewChild('chartOfAccounts') chartOfAccounts: ElementRef<any>;
+  @ViewChild('chartOfAccounts', { read: ElementRef }) chartOfAccounts: ElementRef<any>;
   /* Template for popover on chart of accounts */
   @ViewChild('templateChartOfAccounts') templateChartOfAccounts: TemplateRef<any>;
 
@@ -135,6 +166,23 @@ export class SidenavComponent implements OnInit, AfterViewInit {
         finalize(() => this.router.navigate(['/login'], { replaceUrl: true }))
       )
       .subscribe();
+  }
+
+  /**
+   * Opens the logout confirmation dialog and only runs the existing logout flow
+   * once the operator confirms. Cancelling or dismissing the dialog preserves
+   * the authenticated session.
+   */
+  confirmLogout() {
+    this.dialog
+      .open(LogoutDialogComponent)
+      .afterClosed()
+      .pipe(take(1))
+      .subscribe((confirmed: boolean) => {
+        if (confirmed) {
+          this.logout();
+        }
+      });
   }
 
   /**
@@ -240,17 +288,104 @@ export class SidenavComponent implements OnInit, AfterViewInit {
   }
 
   /**
+   * Steps of the sidenav tour, in order. A step's target is undefined when
+   * its element isn't rendered, e.g. a menu item hidden by mifosxHasPermission.
+   */
+  private get sidenavTourSteps(): {
+    name: string;
+    template: TemplateRef<any>;
+    target: ElementRef<any> | undefined;
+    position: string;
+  }[] {
+    return [
+      { name: 'logo', template: this.templateLogo, target: this.logo, position: 'bottom' },
+      { name: 'userPanel', template: this.templateUserPanel, target: this.userPanel, position: 'bottom' },
+      {
+        name: 'frequentlyAccessed',
+        template: this.templateFrequentlyAccessed,
+        target: this.frequentlyAccessed,
+        position: 'bottom'
+      },
+      { name: 'dashboard', template: this.templateDashboard, target: this.dashboard, position: 'bottom' },
+      { name: 'navigation', template: this.templateNavigation, target: this.navigation, position: 'bottom' },
+      {
+        name: 'frequentPostings',
+        template: this.templateFrequentPostings,
+        target: this.frequentPostings,
+        position: 'top'
+      },
+      {
+        name: 'createJournalEntry',
+        template: this.templateCreateJournalEntry,
+        target: this.createJournalEntry,
+        position: 'top'
+      },
+      {
+        name: 'chartOfAccounts',
+        template: this.templateChartOfAccounts,
+        target: this.chartOfAccounts,
+        position: 'top'
+      }
+    ];
+  }
+
+  /**
+   * Shows the popover of a sidenav tour step.
+   * @param step Step to show; nothing is shown if undefined.
+   */
+  private showTourStep(step?: { template: TemplateRef<any>; target: ElementRef<any>; position: string }): void {
+    if (step) {
+      this.showPopover(step.template, step.target, step.position, true);
+    }
+  }
+
+  /**
+   * Shows the next rendered sidenav tour step after the current one,
+   * or moves on to the breadcrumbs tour if there is none.
+   * @param current Name of the current step.
+   */
+  showNextTourStep(current: string): void {
+    const steps = this.sidenavTourSteps;
+    const currentIndex = steps.findIndex((step) => step.name === current);
+    const next = steps.slice(currentIndex + 1).find((step) => step.target);
+    if (next) {
+      this.showTourStep(next);
+    } else {
+      this.nextStep();
+    }
+  }
+
+  /**
+   * Shows the previous rendered sidenav tour step before the current one,
+   * or moves back to the toolbar tour if there is none.
+   * @param current Name of the current step.
+   */
+  showPreviousTourStep(current: string): void {
+    const steps = this.sidenavTourSteps;
+    const currentIndex = steps.findIndex((step) => step.name === current);
+    const previous = steps
+      .slice(0, currentIndex)
+      .reverse()
+      .find((step) => step.target);
+    if (previous) {
+      this.showTourStep(previous);
+    } else {
+      this.previousStep();
+    }
+  }
+
+  /**
    * To show popovers
    */
   ngAfterViewInit() {
-    if (this.configurationWizardService.showSideNav && this.logo) {
+    if (this.configurationWizardService.showSideNav) {
       setTimeout(() => {
-        this.showPopover(this.templateLogo, this.logo.nativeElement, 'bottom', true);
+        this.showTourStep(this.sidenavTourSteps.find((step) => step.target));
       });
     }
-    if (this.configurationWizardService.showSideNavChartofAccounts && this.chartOfAccounts) {
+    if (this.configurationWizardService.showSideNavChartofAccounts) {
       setTimeout(() => {
-        this.showPopover(this.templateChartOfAccounts, this.chartOfAccounts.nativeElement, 'top', true);
+        this.showTourStep([...this.sidenavTourSteps].reverse().find((step) => step.target));
       });
     }
   }

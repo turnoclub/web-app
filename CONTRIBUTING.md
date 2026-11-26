@@ -131,7 +131,7 @@ We use Prettier to enforce a consistent code style automatically. This eliminate
 We maintain a linear, meaningful git history.
 
 - **One Feature = One PR:** Do not combine unrelated fixes.
-- **Squash Requirement:** If your PR contains more than 2 commits, you must squash them.
+- **Squash Requirement:** If your PR contains more than 1 commit, you must squash them. Merge commits added by "Update branch" are not counted.
   - ❌ **Bad History:** `init`, `wip`, `typo`, `fix`, `fix again`
   - ✅ **Good History:** `WEB-123: Implement client search functionality`
 
@@ -178,6 +178,12 @@ When you are ready to submit your PR:
 - [ ] **Context:** Includes a link to the Slack discussion or summary of approval.
 - [ ] **Visuals:** "Before" and "After" screenshots are attached (if UI related).
 - [ ] **Quality:** Prettier formatting is applied and `ng lint` passes.
+
+### Pull Request Review Etiquette
+
+After opening a PR, please allow mentors reasonable time to review it. Please do not post in Slack to request a PR review or repeatedly tag maintainers. Mentors will review submitted PRs without a Slack reminder, based on their availability and project priorities.
+
+For PR-specific questions, clarifications, and follow-ups, prefer comments on the PR so the discussion stays connected to the change. Use Slack when broader discussion or maintainer input is needed. Please respond to review feedback on the PR and update your branch as needed, keeping communication respectful throughout.
 
 ---
 

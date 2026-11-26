@@ -161,7 +161,6 @@ export class BreadcrumbComponent implements AfterViewInit {
                 const routeData: Data = route.snapshot.data;
                 if (routeData.breadcrumb === 'Clients') {
                   breadcrumbLabel = this.printableValue(routeData.clientViewData.displayName);
-                  currentUrl += `/general`;
                 } else if (routeData.breadcrumb === 'Groups') {
                   breadcrumbLabel = routeData.groupViewData.name;
                 } else if (routeData.breadcrumb === 'Centers') {
@@ -246,7 +245,8 @@ export class BreadcrumbComponent implements AfterViewInit {
 
             const breadcrumb: Breadcrumb = {
               label: breadcrumbLabel,
-              url: url
+              url: url,
+              queryParams: { ...route.snapshot.queryParams }
             };
 
             if (breadcrumbLabel) {
@@ -318,9 +318,16 @@ export class BreadcrumbComponent implements AfterViewInit {
   }
 
   getTranslate(text: string): any {
+    // Route data can provide a complete translation key (for example, feature-scoped keys).
+    // Resolve it before applying the legacy labels.text / labels.menus fallbacks.
+    let translation = this.translateService.instant(text);
+    if (translation !== text) {
+      return translation;
+    }
+
     // First try labels.text.* (for static breadcrumb labels)
     let key: string = 'labels.text.' + text;
-    let translation = this.translateService.instant(key);
+    translation = this.translateService.instant(key);
     if (translation !== key) {
       return translation;
     }

@@ -7,21 +7,21 @@
  */
 
 /** Angular Imports */
-import { ChangeDetectionStrategy, Component, Input, OnDestroy, OnInit, inject } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { Alert } from 'app/core/alert/alert.model';
 import { AlertService } from 'app/core/alert/alert.service';
 import { AuthenticationService } from 'app/core/authentication/authentication.service';
 import { Dates } from 'app/core/utils/dates';
 import { SettingsService } from 'app/settings/settings.service';
 import { SystemService } from 'app/system/system.service';
-import { VersionService } from 'app/system/version.service';
 
 /** Environment Configuration */
 import { environment } from '../../../environments/environment';
 import { Subscription } from 'rxjs';
 import { TranslateService } from '@ngx-translate/core';
-import { NgClass, DatePipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import { STANDALONE_SHARED_IMPORTS } from 'app/standalone-shared.module';
+import { StatusBarComponent } from './status-bar/status-bar.component';
 
 /**
  *  Footer component.
@@ -32,42 +32,25 @@ import { STANDALONE_SHARED_IMPORTS } from 'app/standalone-shared.module';
   styleUrls: ['./footer.component.scss'],
   imports: [
     ...STANDALONE_SHARED_IMPORTS,
-    NgClass,
-    DatePipe
+    DatePipe,
+    StatusBarComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class FooterComponent implements OnInit, OnDestroy {
+  /** Interval between business date configuration refreshes, in milliseconds. */
+  private static readonly configurationsRefreshInterval = 60000;
+
   private systemService = inject(SystemService);
   private settingsService = inject(SettingsService);
   private authenticationService = inject(AuthenticationService);
   private alertService = inject(AlertService);
   private dateUtils = inject(Dates);
-  private versionService = inject(VersionService);
   private translateService = inject(TranslateService);
+  private cdr = inject(ChangeDetectorRef);
 
-  username: string = '';
-  name: string = '';
-  renderTime: Date = new Date();
-
-  @Input() styleClass: string = '';
-  @Input() variant: 'default' | 'compact' = 'default';
-
-  /** Mifos X version. */
-  versions: any = {
-    mifos: environment.version,
-    fineract: {
-      version: '',
-      hash: ''
-    }
-  };
-  /** Mifos X hash */
-  hash: string = environment.hash;
-  server = '';
   /** Business Date */
   businessDate: Date = null;
-  /** Tenant name */
-  tenant: string;
 
   isBusinessDateEnabled = false;
   isBusinessDateDefined = false;
@@ -79,66 +62,33 @@ export class FooterComponent implements OnInit, OnDestroy {
 
   constructor() {
     this.displayBackEndInfo = environment.displayBackEndInfo === 'true';
-    this.setUserInfo();
-    this.renderTime = new Date();
   }
 
   ngOnInit() {
-    if (this.displayBackEndInfo) {
-      this.alert$ = this.alertService.alertEvent.subscribe((alertEvent: Alert) => {
-        const alertType = alertEvent.type;
-        if (alertType === SettingsService.businessDateType + ' Set Config') {
-          this.isBusinessDateEnabled = alertEvent.enabled ? true : false;
-          this.isBusinessDateDefined = false;
-          if (this.isBusinessDateEnabled) {
-            this.setBusinessDate();
-          }
-        } else if (alertType === SettingsService.businessDateType + ' Set') {
-          if (this.isBusinessDateEnabled) {
-            this.setBusinessDate();
-          }
-        } else if (alertType === this.translateService.instant('errors.auth.startType')) {
-          this.timer = setTimeout(() => {
-            this.getConfigurations();
-          }, 60000);
+    // The business date is kept up to date regardless of `displayBackEndInfo`: it is
+    // displayed on its own and stored in the settings service for the whole application.
+    this.alert$ = this.alertService.alertEvent.subscribe((alertEvent: Alert) => {
+      const alertType = alertEvent.type;
+      if (alertType === SettingsService.businessDateType + ' Set Config') {
+        this.isBusinessDateEnabled = alertEvent.enabled ? true : false;
+        this.isBusinessDateDefined = false;
+        if (this.isBusinessDateEnabled) {
+          this.setBusinessDate();
         }
-      });
-      this.getConfigurations();
-      this.server = this.settingsService.server;
-      this.tenant = this.tenantIdentifier();
-      this.versionService.getBackendInfo().subscribe((data: any) => {
-        if (data.git && data.git.build && data.git.build.version) {
-          const buildVersion: string = data.git.build.version.split('-');
-          this.versions.fineract.version = buildVersion[0];
-          this.versions.fineract.hash = buildVersion[1];
+      } else if (alertType === SettingsService.businessDateType + ' Set') {
+        if (this.isBusinessDateEnabled) {
+          this.setBusinessDate();
         }
-      });
-      this.setUserInfo();
-    }
-  }
-
-  setUserInfo() {
-    const credentials = this.authenticationService.getCredentials();
-    if (credentials) {
-      this.username = credentials.username;
-      this.name = credentials.staffDisplayName || credentials.username;
-    } else {
-      this.username = '';
-      this.name = '';
-    }
-  }
-
-  tenantIdentifier() {
-    if (!this.settingsService.tenantIdentifier || this.settingsService.tenantIdentifier === '') {
-      return 'default';
-    }
-    return this.settingsService.tenantIdentifier;
+      } else if (alertType === this.translateService.instant('errors.auth.startType')) {
+        this.scheduleConfigurationsRefresh();
+      }
+    });
+    this.getConfigurations();
   }
 
   ngOnDestroy() {
-    if (this.displayBackEndInfo) {
-      clearTimeout(this.timer);
-    }
+    clearTimeout(this.timer);
+    this.alert$?.unsubscribe();
   }
 
   /**
@@ -153,9 +103,7 @@ export class FooterComponent implements OnInit, OnDestroy {
           this.settingsService.setBusinessDateConfig(configurationData.enabled);
           if (this.isBusinessDateEnabled) {
             this.setBusinessDate();
-            this.timer = setTimeout(() => {
-              this.getConfigurations();
-            }, 60000);
+            this.scheduleConfigurationsRefresh();
           } else {
             clearTimeout(this.timer);
           }
@@ -166,15 +114,35 @@ export class FooterComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Schedules the next configuration refresh, replacing any pending one so that
+   * a single polling chain is active at a time.
+   */
+  private scheduleConfigurationsRefresh(): void {
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => {
+      this.getConfigurations();
+    }, FooterComponent.configurationsRefreshInterval);
+  }
+
+  /**
    * Get the Business Date data
    */
   setBusinessDate(): void {
-    this.systemService.getBusinessDate(SettingsService.businessDateType).subscribe((data: any) => {
-      this.businessDate = new Date(data.date);
-      this.settingsService.setBusinessDate(
-        this.dateUtils.formatDate(this.businessDate, SettingsService.businessDateFormat)
-      );
-      this.isBusinessDateDefined = true;
+    this.systemService.getBusinessDate(SettingsService.businessDateType).subscribe({
+      next: (data: any) => {
+        this.businessDate = this.dateUtils.parseDate(data.date);
+        this.settingsService.setBusinessDate(
+          this.dateUtils.formatDate(this.businessDate, SettingsService.businessDateFormat)
+        );
+        this.isBusinessDateDefined = true;
+        this.cdr.markForCheck();
+      },
+      error: () => {
+        // The configuration is enabled but no business date has been set on this instance yet,
+        // so the footer hides it and the application keeps using the system date.
+        this.isBusinessDateDefined = false;
+        this.cdr.markForCheck();
+      }
     });
   }
 }

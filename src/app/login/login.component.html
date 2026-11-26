@@ -65,11 +65,21 @@
     <!-- Header Controls -->
     <div class="login-header">
       @if (allowServerSwitch()) {
-        <mifosx-server-selector class="header-control" appearance="outline" [showLabel]="false">
+        <mifosx-server-selector
+          class="header-control"
+          appearance="outline"
+          subscriptSizing="dynamic"
+          [showLabel]="false"
+        >
         </mifosx-server-selector>
       }
       <mifosx-theme-toggle class="header-control theme-toggle"></mifosx-theme-toggle>
-      <mifosx-language-selector class="header-control" appearance="outline" [showLabel]="false">
+      <mifosx-language-selector
+        class="header-control"
+        appearance="outline"
+        subscriptSizing="dynamic"
+        [showLabel]="false"
+      >
       </mifosx-language-selector>
     </div>
 
@@ -113,27 +123,9 @@
           }
         </div>
 
-        <!-- Version Info Section -->
-        <div class="login-version-info" *ngIf="displayBackendInfo">
-          <div class="version-info-container">
-            <div class="version-item">
-              <span class="version-label">{{ 'labels.version.Tenant' | translate }}</span>
-              <span class="version-value">{{ tenantDisplayName }}</span>
-            </div>
-            <div class="version-item">
-              <span class="version-label">{{ 'labels.version.Mifos WebApp' | translate }}</span>
-              <span class="version-value">{{ versions?.mifos }}</span>
-            </div>
-            <div class="version-item">
-              <span class="version-label">{{ 'labels.version.Apache Fineract' | translate }}</span>
-              <span class="version-value">{{ versions?.fineract?.version }}</span>
-            </div>
-            <div class="version-item">
-              <span class="version-label">{{ 'labels.version.Server' | translate }}</span>
-              <span class="version-value">{{ server }}</span>
-            </div>
-          </div>
-        </div>
+        @if (displayBackendInfo) {
+          <mifosx-connection-card [server]="server" [tenant]="tenantIdentifier"></mifosx-connection-card>
+        }
 
         <!-- Resources Links (hidden in production mode) -->
         @if (!productionMode) {

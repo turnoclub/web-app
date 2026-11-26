@@ -28,6 +28,9 @@ import { MatLine } from '@angular/material/grid-list';
 import { NgClass } from '@angular/common';
 import { STANDALONE_SHARED_IMPORTS } from 'app/standalone-shared.module';
 
+/** Environment Configuration */
+import { environment } from '../../environments/environment';
+
 @Component({
   selector: 'mifosx-system',
   templateUrl: './system.component.html',
@@ -76,9 +79,12 @@ export class SystemComponent implements AfterViewInit {
   @ViewChild('manageReports') manageReports: ElementRef<any>;
   /* Template for popover on manage reports */
   @ViewChild('templateManageReports') templateManageReports: TemplateRef<any>;
-  // Initialize an array of 17 boolean values, all set to false
+  /** Whether this deployment has the Fineract tenant management plugin. */
+  readonly tenantManagementEnabled = environment.enableTenantManagement;
+
+  // Initialize an array of 18 boolean values, all set to false
   isDisabled: boolean = true;
-  arrowBooleans: boolean[] = new Array(17).fill(false);
+  arrowBooleans: boolean[] = new Array(18).fill(false);
 
   /**
    * Popover function
@@ -207,7 +213,7 @@ export class SystemComponent implements AfterViewInit {
   previousStepMakerCheckerTable() {
     this.configurationWizardService.showMakerCheckerTable = false;
     this.configurationWizardService.showUsersForm = true;
-    this.router.navigate(['/users/create']);
+    this.router.navigate(['/appusers/create']);
   }
 
   /**
@@ -234,7 +240,7 @@ export class SystemComponent implements AfterViewInit {
   nextStepSchedulerJobs() {
     this.configurationWizardService.showSchedulerJobs = false;
     this.configurationWizardService.showSchedulerJobsPage = true;
-    this.router.navigate(['/system/scheduler-jobs']);
+    this.router.navigate(['/system/manage-jobs']);
   }
 
   /**
@@ -243,7 +249,7 @@ export class SystemComponent implements AfterViewInit {
   previousStepSchedulerJobs() {
     this.configurationWizardService.showSchedulerJobs = false;
     this.configurationWizardService.showConfigurationsList = true;
-    this.router.navigate(['/system/global-configurations']);
+    this.router.navigate(['/system/configurations']);
   }
 
   /**

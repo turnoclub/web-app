@@ -7,12 +7,28 @@
 -->
 
 @if (!hideOutput) {
-  <iframe
-    [src]="birtUrl"
-    [title]="'BIRT report: ' + (dataObject?.report?.name || 'report')"
-    sandbox="allow-same-origin allow-forms"
-    frameborder="0"
-    width="100%"
-    height="750px;"
-  ></iframe>
+  @if (reportHtml) {
+    <iframe
+      [srcdoc]="reportHtml"
+      [title]="'BIRT report: ' + (dataObject?.report?.name || 'report')"
+      sandbox="allow-scripts"
+      frameborder="0"
+      width="100%"
+      height="750px"
+    ></iframe>
+  } @else if (pdfData) {
+    <a mat-flat-button [href]="downloadUrl" [attr.download]="downloadName">
+      {{ 'labels.buttons.Download PDF' | translate }}
+    </a>
+    <mifosx-birt-pdf-preview [data]="pdfData"></mifosx-birt-pdf-preview>
+  } @else if (downloadUrl) {
+    <div class="birt-download">
+      <p class="birt-download__note">
+        {{ 'labels.text.This report format cannot be previewed in the browser' | translate }}
+      </p>
+      <a class="birt-download__link" [href]="downloadUrl" [attr.download]="downloadName">
+        {{ 'labels.buttons.Download' | translate }}
+      </a>
+    </div>
+  }
 }

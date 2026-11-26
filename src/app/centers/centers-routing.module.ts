@@ -67,6 +67,11 @@ const routes: Routes = [
               },
               children: [
                 {
+                  path: '',
+                  redirectTo: 'general',
+                  pathMatch: 'full'
+                },
+                {
                   path: 'general',
                   component: GeneralTabComponent,
                   data: { title: 'General', breadcrumb: 'General', routeParamBreadcrumb: false },
@@ -114,6 +119,10 @@ const routes: Routes = [
               resolve: {
                 centerData: CenterDataAndTemplateResolver
               }
+            },
+            {
+              path: 'savings-accounts',
+              loadChildren: () => import('../savings/savings.module').then((m) => m.SavingsModule)
             }
           ]
         }
